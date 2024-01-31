@@ -1,7 +1,7 @@
 from utils.parser import Parser
 
 parser = Parser()
-sbs = parser.raw_to_df(['files/coco_diversity_cd5_executionResult.out'])
+sbs = parser.raw_to_df(['files/coco_diversity_teacher_50_executionResult.out'], overlap=3)
 aggr = parser.aggregate(sbs)
 print(aggr)
 

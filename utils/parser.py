@@ -4,6 +4,7 @@ import json
 import pandas as pd
 import pickle
 import random
+from collections import Counter
 
 class Parser:
 
@@ -28,7 +29,18 @@ class Parser:
     # -----------------------------------------------------
 
     # -----------------------------------------------------
-    def raw_to_df(self, paths):
+    def raw_to_df(self, paths, overlap=3):
+        print(f'Overlapping across annotators is {overlap}')
+        def aggregate(inp):
+            if overlap == 1:
+                return inp[0]
+
+            inp = list(inp)
+            max_val = max(Counter(inp).values())
+            if max_val == 1:
+                return -1
+            else:
+                return max(set(inp), key=inp.count)
 
         # Collect all raw annotations into pandas df
         df_raw = pd.DataFrame()
@@ -41,7 +53,7 @@ class Parser:
         df_raw['idx'] = range(0, len(df_raw))
         df_raw = df_raw.set_index('idx')
 
-        # Easy to use pandas
+        # To easy to use pandas
         total_dict = {}
         for i in range(len(df_raw)):
             raw_input = df_raw['inputValues'][i]
@@ -55,19 +67,26 @@ class Parser:
             raw_output = df_raw['outputValues'][i]
             for key in raw_output.keys():
                 try:
-                    total_dict[key].append(raw_output[key])
+                    total_dict[key].append(self.keys[raw_output[key]])
                 except KeyError:
                     total_dict[key] = []
-                    total_dict[key].append(raw_output[key])
+                    total_dict[key].append(self.keys[raw_output[key]])
 
-        df_final = pd.DataFrame.from_dict(total_dict)
+        # Aggregating across annotators
+        new_dict = {}
+        for key in total_dict.keys():
+            old_values = total_dict[key]
+            splitted_values = np.array_split(old_values, len(df_raw) / overlap)
+            new_values = [aggregate(items) for items in splitted_values]
+            new_dict[key] = new_values
+        df_final = pd.DataFrame.from_dict(new_dict)
+
         return df_final
     # -----------------------------------------------------
 
     # -----------------------------------------------------
     def aggregate(self, df):
         assert isinstance(df, pd.DataFrame), "Aggregation requires parsed dataframe"
-        print(f'Aggregating is performed using {self.factors} factors')
 
         # Aggregation function
         def calculate(inp):
@@ -75,7 +94,7 @@ class Parser:
             average_factors = []
             for factor in self.factors:
                 factor_values = inp[factor]
-                values = [self.keys[elem] for elem in factor_values if self.keys[elem] != -1]
+                values = [elem for elem in factor_values if elem != -1]
                 mean_factor_df = np.mean(values)
                 average_factors.append(mean_factor_df)
                 res[factor] = mean_factor_df
