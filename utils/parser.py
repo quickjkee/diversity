@@ -29,12 +29,8 @@ class Parser:
     # -----------------------------------------------------
 
     # -----------------------------------------------------
-    def raw_to_df(self, paths, overlap=3):
-        print(f'Overlapping across annotators is {overlap}')
+    def raw_to_df(self, paths, do_overlap=True):
         def aggregate(inp):
-            if overlap == 1:
-                return inp[0]
-
             inp = list(inp)
             max_val = max(Counter(inp).values())
             if max_val == 1:
@@ -66,6 +62,8 @@ class Parser:
 
             raw_output = df_raw['outputValues'][i]
             for key in raw_output.keys():
+                if key not in self.factors:
+                    continue
                 try:
                     total_dict[key].append(self.keys[raw_output[key]])
                 except KeyError:
@@ -73,13 +71,21 @@ class Parser:
                     total_dict[key].append(self.keys[raw_output[key]])
 
         # Aggregating across annotators
-        new_dict = {}
-        for key in total_dict.keys():
-            old_values = total_dict[key]
-            splitted_values = np.array_split(old_values, len(df_raw) / overlap)
-            new_values = [aggregate(items) for items in splitted_values]
-            new_dict[key] = new_values
-        df_final = pd.DataFrame.from_dict(new_dict)
+        if do_overlap:
+            df_total = pd.DataFrame.from_dict(total_dict)
+            a = df_total.groupby(['image_1'])
+            total_dict = {}
+            for name, group in a:
+                for key in group.columns:
+                    values = list(group[key])
+                    new_values = aggregate(values)
+                    try:
+                        total_dict[key].append(new_values)
+                    except KeyError:
+                        total_dict[key] = []
+                        total_dict[key].append(new_values)
+
+        df_final = pd.DataFrame.from_dict(total_dict)
 
         return df_final
     # -----------------------------------------------------
