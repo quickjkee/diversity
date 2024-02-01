@@ -52,6 +52,8 @@ class DiversityDataset(Dataset):
 
     def make_data(self):
         # Can be reimplemented further
+        print('Creating dataset...')
+
         list_of_dicts = self.df.to_dict('records')
 
         # Make images from urls
