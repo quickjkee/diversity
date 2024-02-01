@@ -1,12 +1,9 @@
 from utils.parser import Parser
+from dataset import DiversityDataset
+from models.baseline_clip import preprocess
 
 parser = Parser()
-sbs = parser.raw_to_df(['files/0_500_pickscore_coco'], do_overlap=True)
-aggr = parser.aggregate(sbs)
-print(aggr)
+df = parser.raw_to_df(['files/0_500_pickscore_coco'], do_overlap=True)
+dataset = DiversityDataset(df, preprocess=preprocess)
 
-"""
-#url = 'https://storage.yandexcloud.net/yandex-research/new_adaptive_sbs/coco_600/diversity/cd5/seed600_1200/185.jpg'
-#response = requests.get(url)
-#img = Image.open(BytesIO(response.content))
-"""
+print(dataset[0])
