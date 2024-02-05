@@ -43,9 +43,10 @@ class DiversityDataset(Dataset):
         if preprocess is None:
             preprocess = _transform(224)
         if local_path is None:
-            local_path = '/extra_disk_1/quickjkee/diversity_images'
+            print('Dataset will be loaded from url')
+        else:
+            print(f'Dataset downloaded locally in {local_path}')
 
-        print(f'Dataset local path {local_path}')
         self.local_path = local_path
 
         self.preprocess = preprocess
@@ -68,22 +69,28 @@ class DiversityDataset(Dataset):
         for j, item in tqdm(enumerate(list_of_dicts)):
             # img1
             img_1_url = item['image_1']
-            splitted_path = img_1_url.split('/')
-            main_path = f'{splitted_path[-3]}/{splitted_path[-2]}/{splitted_path[-1]}'
-            path = f'{self.local_path}/{main_path}'
+            if self.local_path is not None:
+                splitted_path = img_1_url.split('/')
+                main_path = f'{splitted_path[-3]}/{splitted_path[-2]}/{splitted_path[-1]}'
+                path = f'{self.local_path}/{main_path}'
+                pil_image = open_img(path)
+            else:
+                pil_image = url_to_img(img_1_url)
 
-            pil_image = open_img(path)
-            image_1 = self.preprocess(pil_image).unsqueeze(0)
+            image_1 = self.preprocess(pil_image)
             list_of_dicts[j]['image_1'] = image_1
 
             # img2
             img_2_url = item['image_2']
-            splitted_path = img_2_url.split('/')
-            main_path = f'{splitted_path[-3]}/{splitted_path[-2]}/{splitted_path[-1]}'
-            path = f'{self.local_path}/{main_path}'
+            if self.local_path is not None:
+                splitted_path = img_2_url.split('/')
+                main_path = f'{splitted_path[-3]}/{splitted_path[-2]}/{splitted_path[-1]}'
+                path = f'{self.local_path}/{main_path}'
+                pil_image = open_img(path)
+            else:
+                pil_image = url_to_img(img_2_url)
 
-            pil_image = open_img(path)
-            image_2 = self.preprocess(pil_image).unsqueeze(0)
+            image_2 = self.preprocess(pil_image)
             list_of_dicts[j]['image_2'] = image_2
 
         return list_of_dicts

@@ -7,8 +7,21 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from utils.parser import Parser
 from dataset import DiversityDataset
-from models.baseline_clip import preprocess, ClipBase
+from models.baseline_clip import preprocess
 
+
+parser = Parser()
+paths = ['files/diverse_coco_pick_3_per_prompt_1000_1500',
+         'files/0_500_pickscore_coco',
+         'files/diverse_coco_pick_3_per_prompt_500_1000.out']
+df = parser.raw_to_df(paths, do_overlap=True)[:30]
+dataset = DiversityDataset(df, preprocess=preprocess)
+train_loader = DataLoader(dataset, batch_size=5)
+
+for step, batch_data_package in enumerate(train_loader):
+    print(batch_data_package['image_1'].shape)
+
+"""
 def samples_metric(true, pred, n_boots=30, type='accuracy'):
     labels = set(true)
     class_weights = {}
@@ -93,3 +106,4 @@ for j in range(2):
 
 plt.suptitle(f'{factor}')
 plt.savefig(f'{factor}.png')
+"""
