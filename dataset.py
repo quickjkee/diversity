@@ -33,12 +33,20 @@ def url_to_img(url):
     img = Image.open(BytesIO(response.content))
     return img
 
+def open_img(path):
+    img = Image.open(path)
+    return img
 
 class DiversityDataset(Dataset):
 
-    def __init__(self, df, preprocess=None):
+    def __init__(self, df, local_path=None, preprocess=None):
         if preprocess is None:
             preprocess = _transform(224)
+        if local_path is None:
+            local_path = '/extra_disk_1/quickjkee/diversity_images'
+
+        print(f'Dataset local path {local_path}')
+        self.local_path = local_path
 
         self.preprocess = preprocess
         self.df = df
@@ -60,13 +68,21 @@ class DiversityDataset(Dataset):
         for j, item in tqdm(enumerate(list_of_dicts)):
             # img1
             img_1_url = item['image_1']
-            pil_image = url_to_img(img_1_url)
+            splitted_path = img_1_url.split('/')
+            main_path = f'{splitted_path[-3]}/{splitted_path[-2]}/{splitted_path[-1]}'
+            path = f'{self.local_path}/{main_path}'
+
+            pil_image = open_img(path)
             image_1 = self.preprocess(pil_image).unsqueeze(0)
             list_of_dicts[j]['image_1'] = image_1
 
             # img2
             img_2_url = item['image_2']
-            pil_image = url_to_img(img_2_url)
+            splitted_path = img_2_url.split('/')
+            main_path = f'{splitted_path[-3]}/{splitted_path[-2]}/{splitted_path[-1]}'
+            path = f'{self.local_path}/{main_path}'
+
+            pil_image = open_img(path)
             image_2 = self.preprocess(pil_image).unsqueeze(0)
             list_of_dicts[j]['image_2'] = image_2
 

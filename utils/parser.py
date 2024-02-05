@@ -24,7 +24,9 @@ class Parser:
         self.keys = keys
         self.factors = factors
         # Cheating annotators
-        self.gays = ['7b3c70c950afd356c52847a2665e85e6', '29464473a65afe4015ea060dac0aa6c6']
+        cheat_workers = ['7b3c70c950afd356c52847a2665e85e6', '29464473a65afe4015ea060dac0aa6c6']
+        print(f'Workers {cheat_workers} will be skipped')
+        self.gays = cheat_workers
     # -----------------------------------------------------
 
     # -----------------------------------------------------
@@ -32,7 +34,7 @@ class Parser:
         def aggregate(inp):
             inp = list(inp)
             max_val = max(Counter(inp).values())
-            if max_val == 1:
+            if max_val == 1 and isinstance(inp[0], int):
                 return -1
             else:
                 return max(set(inp), key=inp.count)
@@ -53,7 +55,7 @@ class Parser:
         for i in range(len(df_raw)):
             name = df_raw["workerId"][i]
             if name in self.gays:
-                print(f'Worker {name} is skipped')
+                continue
 
             raw_input = df_raw['inputValues'][i]
             for key in raw_input.keys():

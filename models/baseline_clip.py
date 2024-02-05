@@ -4,13 +4,14 @@ import torch.nn.functional as F
 
 model, _, preprocess = open_clip.create_model_and_transforms('ViT-B-32', pretrained='laion2b_s34b_b79k')
 tokenizer = open_clip.get_tokenizer('ViT-B-32')
-
+model.to('cuda')
 
 class ClipBase:
 
     def __init__(self):
         self.model = model
 
+    @torch.no_grad()
     def _predict(self, item, factor):
         # img1
         image_1 = item['image_1'].to('cuda')
@@ -27,6 +28,7 @@ class ClipBase:
         true = item[factor]
         return pred, true
 
+    @torch.no_grad()
     def __call__(self, dataset, factor):
         preds = []
         trues = []
