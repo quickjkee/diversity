@@ -13,8 +13,8 @@ class Parser:
         if keys is None:
             keys = {
                 'no_info': -1,
-                'same': 0,
-                'different': 1
+                'same': 1,
+                'different': 0
             }
             print(f'Parser initialized with the keys {keys}')
         if factors is None:
@@ -23,6 +23,8 @@ class Parser:
 
         self.keys = keys
         self.factors = factors
+        # Cheating annotators
+        self.gays = ['7b3c70c950afd356c52847a2665e85e6', '29464473a65afe4015ea060dac0aa6c6']
     # -----------------------------------------------------
 
     # -----------------------------------------------------
@@ -49,6 +51,10 @@ class Parser:
         # To easy to use pandas
         total_dict = {}
         for i in range(len(df_raw)):
+            name = df_raw["workerId"][i]
+            if name in self.gays:
+                print(f'Worker {name} is skipped')
+
             raw_input = df_raw['inputValues'][i]
             for key in raw_input.keys():
                 try:
