@@ -23,7 +23,7 @@ class ClipBase:
         image_features_2 /= image_features_1.norm(dim=-1, keepdim=True)
 
         # similarity
-        pred = F.cosine_similarity(image_features_1, image_features_2, dim=1).item()
+        pred = (F.cosine_similarity(image_features_1, image_features_2, dim=1).item() + 1) / 2
         true = item[factor]
         return pred, true
 

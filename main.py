@@ -1,13 +1,34 @@
 import numpy as np
-from sklearn.metrics import f1_score, accuracy_score, precision_score, recall_score
+from sklearn.metrics import accuracy_score
+from torch.utils.data import WeightedRandomSampler
+from torch.utils.data import DataLoader, TensorDataset
 
 from utils.parser import Parser
 from dataset import DiversityDataset
 from models.baseline_clip import preprocess, ClipBase
 
+def samples_accuracy(true, pred):
+    labels = set(true)
+    class_weights = {}
+    for label in labels:
+        class_weights[label] = 0
+        for el in true:
+            if el == label:
+                class_weights[label] += 1
+        class_weights[label] = 1 / class_weights[label]
+
+    sample_weights = [class_weights[item] for item in true]
+    dataset = TensorDataset([[tr, pr] for tr, pr in zip(true, pred)])
+    sampler = WeightedRandomSampler(weights=sample_weights, num_samples=len(true), replacement=True)
+    dl = DataLoader(dataset, sampler=sampler, batch_size=len(true))
+    for item in dl:
+        print(item)
 
 parser = Parser()
-df = parser.raw_to_df(['files/0_500_pickscore_coco'], do_overlap=True)
+paths = ['../files/diverse_coco_pick_3_per_prompt_1000_1500',
+         '../files/0_500_pickscore_coco',
+         '../files/diverse_coco_pick_3_per_prompt_500_1000.out']
+df = parser.raw_to_df(paths, do_overlap=True)
 dataset = DiversityDataset(df, preprocess=preprocess)
 
 clip_baseline = ClipBase()
@@ -18,39 +39,30 @@ true = np.array(true)
 idx = true != -1
 true = list(true[idx])
 pred = pred[idx]
-print(true)
 
-prs = []
-rs = []
-f1s = []
 accs = []
 means = []
 threshs = np.linspace(min(pred), max(pred), 10)
 for thresh in threshs:
-    curr_pred = np.array(pred) > thresh
-    curr_pred = np.array([not item for item in curr_pred]) * 1
+    curr_pred = (np.array(pred) > thresh) * 1
     curr_pred = list(curr_pred.astype(int))
-    means.append(np.sum(curr_pred * np.array(true)) / np.linalg.norm(curr_pred * np.array(true)) )
-    accs.append(accuracy_score(true, curr_pred))
-    f1s.append(f1_score(true, curr_pred))
-    rs.append(recall_score(true, curr_pred))
-    prs.append(precision_score(true, curr_pred))
+    sim = np.dot(curr_pred, true) / (np.linalg.norm(curr_pred) * np.linalg.norm(true))
+    means.append((sim + 1) / 2)
+    accs.append(samples_accuracy(true, curr_pred))
+    break
 
 stupid = [1] * len(true)
-f1_stupid =f1_score(true, stupid)
-r_stupid = recall_score(true, stupid)
 ac_stupid = accuracy_score(true, stupid)
-pr_stupid = precision_score(true, stupid)
 
-fake_taxi = np.array([not item for item in true]) * 1
-true_mean = np.sum(pred * fake_taxi) / np.linalg.norm(pred * fake_taxi)
+true = np.array([not item for item in true]) * 1
+true_mean = np.dot(pred, true) / (np.linalg.norm(pred) * np.linalg.norm(true))
 
 import matplotlib.pyplot as plt
-fig, axes = plt.subplots(1, 5, figsize=(30, 5))
-metrics = ['precision', 'recall', 'f1', 'accuracy', 'means']
-values = [prs, rs, f1s, accs, means]
-stupid = [pr_stupid, r_stupid, f1_stupid, ac_stupid, true_mean]
-for j in range(5):
+fig, axes = plt.subplots(1, 2, figsize=(30, 5))
+metrics = ['accuracy', 'means']
+values = [accs, means]
+stupid = [ac_stupid, true_mean]
+for j in range(2):
     axes[j].set_title(metrics[j])
     axes[j].plot(threshs, values[j])
     axes[j].axhline(stupid[j], color='r', linestyle='-')
