@@ -83,10 +83,10 @@ if __name__ == "__main__":
 
     train_dataset = DiversityDataset(train_df,
                                      local_path='/extra_disk_1/quickjkee/diversity_images',
-                                     preprocess=preprocess)
+                                     preprocess=None)
     valid_dataset = DiversityDataset(test_df,
                                      local_path='/extra_disk_1/quickjkee/diversity_images',
-                                     preprocess=preprocess)
+                                     preprocess=None)
     test_dataset = valid_dataset
     
     if opts.distributed:

@@ -138,7 +138,7 @@ class ImageReward(nn.Module):
         image_atts = torch.ones(image_embeds.size()[:-1], dtype=torch.long).to(self.device)
         emb = self.blip.text_encoder(text_ids,
                                      attention_mask=text_mask,
-                                     encoder_hidden_states=image_atts,
+                                     encoder_hidden_states=image_embeds,
                                      encoder_attention_mask=image_atts,
                                      return_dict=True,
                                      ).last_hidden_state  # [batch_size, seq_len, feature_dim]
