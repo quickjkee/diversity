@@ -34,16 +34,19 @@ def url_to_img(url):
     img = Image.open(BytesIO(response.content))
     return img
 
+
 def open_img(path):
     img = Image.open(path)
     return img
 
+
 def init_tokenizer():
     tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-    tokenizer.add_special_tokens({'bos_token':'[DEC]'})
-    tokenizer.add_special_tokens({'additional_special_tokens':['[ENC]']})
+    tokenizer.add_special_tokens({'bos_token': '[DEC]'})
+    tokenizer.add_special_tokens({'additional_special_tokens': ['[ENC]']})
     tokenizer.enc_token_id = tokenizer.additional_special_tokens_ids[0]
     return tokenizer
+
 
 class DiversityDataset(Dataset):
 
@@ -51,7 +54,7 @@ class DiversityDataset(Dataset):
         if preprocess is None:
             preprocess = _transform(224)
         if local_path is None:
-            print('Dataset will be loaded from url')
+            print('Dataset will be loaded from urls')
         else:
             print(f'Dataset downloaded locally in {local_path}')
 
@@ -59,8 +62,8 @@ class DiversityDataset(Dataset):
 
         self.preprocess = preprocess
         self.df = df
-        self.data = self.make_data()
         self.tokenizer = init_tokenizer()
+        self.data = self.make_data()
 
     def __getitem__(self, index):
         return self.data[index]
@@ -69,9 +72,6 @@ class DiversityDataset(Dataset):
         return len(self.df)
 
     def make_data(self):
-        # Can be reimplemented further
-        print('Creating dataset...')
-
         list_of_dicts = self.df.to_dict('records')
 
         # Make images from urls

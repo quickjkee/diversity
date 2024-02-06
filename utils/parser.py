@@ -30,7 +30,7 @@ class Parser:
     # -----------------------------------------------------
 
     # -----------------------------------------------------
-    def raw_to_df(self, paths, do_overlap=True):
+    def raw_to_df(self, paths, do_overlap=True, keep_no_info=True):
         def aggregate(inp):
             inp = list(inp)
             max_val = max(Counter(inp).values())
@@ -91,6 +91,10 @@ class Parser:
                         total_dict[key].append(new_values)
 
         df_final = pd.DataFrame.from_dict(total_dict)
+        if not keep_no_info:
+            for factor in self.factors:
+                df_final = df_final[df_final[factor] != self.keys['no_info']]
+                df_final.reset_index(drop=True)
 
         return df_final
     # -----------------------------------------------------

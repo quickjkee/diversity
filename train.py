@@ -6,7 +6,7 @@
 @Description:   Train reward model.
 '''
 
-import os
+# LOCAL
 from models.src.config.options import *
 from models.src.config.utils import *
 from models.src.config.learning_rates import get_learning_rate_scheduler
@@ -15,14 +15,16 @@ opts.BatchSize = opts.batch_size * opts.accumulation_steps * opts.gpu_num
 
 from dataset import DiversityDataset
 from models.src.ImageReward import ImageReward
+from utils.parser import Parser
 
+# GLOBAL
 import torch
+import sys
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
-import torch.nn.functional as F
 from torch.backends import cudnn
 
-import sys
 
 def std_log():
     if get_rank() == 0:
@@ -41,14 +43,11 @@ def init_seeds(seed, cuda_deterministic=True):
        cudnn.benchmark = True
 
 
-def loss_func(reward):
-    
-    target = torch.zeros(reward.shape[0], dtype=torch.long).to(reward.device)
-    loss_list = F.cross_entropy(reward, target, reduction='none')
+def loss_func(predict, target):
+    loss_list = F.binary_cross_entropy(predict, target, reduction='none')
     loss = torch.mean(loss_list)
-    
-    reward_diff = reward[:, 0] - reward[:, 1]
-    acc = torch.mean((reward_diff > 0).clone().detach().float())
+    labels_pred = (predict > 0.5) * 1.0
+    acc = (labels_pred == target).sum().clone().detach().float()
     
     return loss, loss_list, acc
 
@@ -71,7 +70,15 @@ if __name__ == "__main__":
 
     writer = visualizer()
 
-    train_dataset = DiversityDataset("train")
+    parser = Parser()
+    paths = ['../files/0_500_pickscore_coco',
+             '../files/diverse_coco_pick_3_per_prompt_500_1000.out',
+             '../files/diverse_coco_pick_3_per_prompt_1000_1500',
+             '../files/diverse_coco_pick_3_per_prompt_1500_2000',
+             '../files/diverse_coco_pick_3_per_prompt_2000_2500']
+    sbs = parser.raw_to_df(paths, do_overlap=True, keep_no_info=False)
+
+    train_dataset = DiversityDataset("train") # TODO
     valid_dataset = DiversityDataset("valid")
     test_dataset = DiversityDataset("test")
     
@@ -110,8 +117,9 @@ if __name__ == "__main__":
         valid_acc_list = []
         with torch.no_grad():
             for step, batch_data_package in enumerate(valid_loader):
-                reward = model(batch_data_package)
-                loss, loss_list, acc = loss_func(reward)
+                predict = model(batch_data_package)
+                target = batch_data_package['background'].to(device)
+                loss, loss_list, acc = loss_func(predict, target)
                 valid_loss.append(loss_list)
                 valid_acc_list.append(acc.item())
     
@@ -133,8 +141,9 @@ if __name__ == "__main__":
         
         for step, batch_data_package in enumerate(train_loader):
             model.train()
-            reward = model(batch_data_package)
-            loss, loss_list, acc = loss_func(reward)
+            predict = model(batch_data_package)
+            target = batch_data_package['background'].to(device)
+            loss, loss_list, acc = loss_func(predict, target)
             # loss regularization
             loss = loss / opts.accumulation_steps
             # back propagation
@@ -171,8 +180,9 @@ if __name__ == "__main__":
                     valid_acc_list = []
                     with torch.no_grad():
                         for step, batch_data_package in enumerate(valid_loader):
-                            reward = model(batch_data_package)
-                            loss, loss_list, acc = loss_func(reward)
+                            predict = model(batch_data_package)
+                            target = batch_data_package['background'].to(device)
+                            loss, loss_list, acc = loss_func(predict, target)
                             valid_loss.append(loss_list)
                             valid_acc_list.append(acc.item())
                 
