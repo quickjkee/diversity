@@ -5,6 +5,7 @@ from tqdm import tqdm
 from torchvision.transforms import Compose, Resize, CenterCrop, ToTensor, Normalize
 from torch.utils.data import Dataset
 from io import BytesIO
+from transformers import BertTokenizer
 
 try:
     from torchvision.transforms import InterpolationMode
@@ -37,6 +38,13 @@ def open_img(path):
     img = Image.open(path)
     return img
 
+def init_tokenizer():
+    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+    tokenizer.add_special_tokens({'bos_token':'[DEC]'})
+    tokenizer.add_special_tokens({'additional_special_tokens':['[ENC]']})
+    tokenizer.enc_token_id = tokenizer.additional_special_tokens_ids[0]
+    return tokenizer
+
 class DiversityDataset(Dataset):
 
     def __init__(self, df, local_path=None, preprocess=None):
@@ -52,6 +60,7 @@ class DiversityDataset(Dataset):
         self.preprocess = preprocess
         self.df = df
         self.data = self.make_data()
+        self.tokenizer = init_tokenizer()
 
     def __getitem__(self, index):
         return self.data[index]
@@ -66,7 +75,8 @@ class DiversityDataset(Dataset):
         list_of_dicts = self.df.to_dict('records')
 
         # Make images from urls
-        for j, item in tqdm(enumerate(list_of_dicts)):
+        bar = tqdm(range(len(list_of_dicts)), desc=f'making dataset: ')
+        for j, item in enumerate(list_of_dicts):
             # img1
             img_1_url = item['image_1']
             if self.local_path is not None:
@@ -92,5 +102,13 @@ class DiversityDataset(Dataset):
 
             image_2 = self.preprocess(pil_image)
             list_of_dicts[j]['image_2'] = image_2
+
+            prompt = list_of_dicts[j]['instruct']
+            text_input = self.tokenizer(prompt,
+                                        padding='max_length', truncation=True, max_length=35, return_tensors="pt")
+            list_of_dicts[j]['text_ids'] = text_input.input_ids
+            list_of_dicts[j]['text_mask'] = text_input.attention_mask
+
+            bar.update(1)
 
         return list_of_dicts

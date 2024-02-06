@@ -7,15 +7,14 @@
 '''
 
 import os
-from config.options import *
-from config.utils import *
-from config.learning_rates import get_learning_rate_scheduler
+from models.src.config.options import *
+from models.src.config.utils import *
+from models.src.config.learning_rates import get_learning_rate_scheduler
 os.environ['CUDA_VISIBLE_DEVICES'] = opts.gpu_id
 opts.BatchSize = opts.batch_size * opts.accumulation_steps * opts.gpu_num
 
-from rank_dataset import rank_dataset
-from rank_pair_dataset import rank_pair_dataset
-from ImageReward import ImageReward
+from dataset import DiversityDataset
+from models.src.ImageReward import ImageReward
 
 import torch
 from torch.utils.data import DataLoader
@@ -72,14 +71,9 @@ if __name__ == "__main__":
 
     writer = visualizer()
 
-    if opts.rank_pair:
-        train_dataset = rank_pair_dataset("train")
-        valid_dataset = rank_pair_dataset("valid")
-        test_dataset = rank_pair_dataset("test")
-    else:
-        train_dataset = rank_dataset("train")
-        valid_dataset = rank_dataset("valid")
-        test_dataset = rank_dataset("test")
+    train_dataset = DiversityDataset("train")
+    valid_dataset = DiversityDataset("valid")
+    test_dataset = DiversityDataset("test")
     
     if opts.distributed:
         train_sampler = DistributedSampler(train_dataset)

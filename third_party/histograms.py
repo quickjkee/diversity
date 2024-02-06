@@ -1,11 +1,9 @@
 import matplotlib.pyplot as plt
-import numpy as np
 from utils.parser import Parser
 
 parser = Parser()
-paths = ['../files/diverse_coco_pick_3_per_prompt_1000_1500',
-         '../files/0_500_pickscore_coco',
-         '../files/diverse_coco_pick_3_per_prompt_500_1000.out']
+paths = [
+         '../files/diverse_coco_pick_3_per_prompt_2000_2500']
 sbs = parser.raw_to_df(paths, do_overlap=True)
 
 models = ['addxl', 'lcmxl', 'sd21', 'sdxl', 'all']

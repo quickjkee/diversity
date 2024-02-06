@@ -18,6 +18,7 @@ from torchvision.transforms import Compose, Resize, CenterCrop, ToTensor, Normal
 
 try:
     from torchvision.transforms import InterpolationMode
+
     BICUBIC = InterpolationMode.BICUBIC
 except ImportError:
     BICUBIC = Image.BICUBIC
@@ -41,29 +42,30 @@ class MLP(nn.Module):
     def __init__(self, input_size):
         super().__init__()
         self.input_size = input_size
-        
+
         self.layers = nn.Sequential(
             nn.Linear(self.input_size, 1024),
-            #nn.ReLU(),
+            # nn.ReLU(),
             nn.Dropout(0.2),
             nn.Linear(1024, 128),
-            #nn.ReLU(),
+            # nn.ReLU(),
             nn.Dropout(0.2),
             nn.Linear(128, 64),
-            #nn.ReLU(),
+            # nn.ReLU(),
             nn.Dropout(0.1),
             nn.Linear(64, 16),
-            #nn.ReLU(),
-            nn.Linear(16, 1)
+            # nn.ReLU(),
+            nn.Linear(16, 1),
+            nn.Sigmoid()
         )
-        
+
         # initial MLP param
         for name, param in self.layers.named_parameters():
             if 'weight' in name:
-                nn.init.normal_(param, mean=0.0, std=1.0/(self.input_size+1))
+                nn.init.normal_(param, mean=0.0, std=1.0 / (self.input_size + 1))
             if 'bias' in name:
                 nn.init.constant_(param, val=0)
-        
+
     def forward(self, input):
         return self.layers(input)
 
@@ -74,17 +76,18 @@ class ImageReward(nn.Module):
         self.device = device
 
         self.input_layer = nn.Conv2d(in_channels=6, out_channels=3, kernel_size=1)
-        self.blip = blip_pretrain(pretrained=config['blip_path'], image_size=config['BLIP']['image_size'], vit=config['BLIP']['vit'])
+        self.blip = blip_pretrain(pretrained=config['blip_path'], image_size=config['BLIP']['image_size'],
+                                  vit=config['BLIP']['vit'])
         self.preprocess = _transform(config['BLIP']['image_size'])
         self.mlp = MLP(config['ImageReward']['mlp_dim'])
-        
+
         if opts.fix_base:
             self.blip.requires_grad_(False)
-        
+
         for name, parms in self.blip.named_parameters():
             if '_proj' in name:
                 parms.requires_grad_(False)
-        
+
         # fix certain ratio of layers
         self.image_layer_num = 24 if config['BLIP']['vit'] == 'large' else 12
         if opts.fix_rate > 0:
@@ -99,7 +102,6 @@ class ImageReward(nn.Module):
                 if image_fix_num in name:
                     break
 
-
     def loose_layer(self, fix_rate):
         text_layer_id = [f"layer.{id}" for id in range(int(12 * fix_rate), 13)]
         image_layer_id = [f"blocks.{id}" for id in range(int(24 * fix_rate), 25)]
@@ -112,55 +114,37 @@ class ImageReward(nn.Module):
                 if image_id in name:
                     parms.requires_grad_(True)
 
-
     def forward(self, batch_data):
-        
+
         # encode data
         batch_data = self.encode_pair(batch_data)
-        
         # forward
-        emb_better, emb_worse = batch_data['emb_better'], batch_data['emb_worse']
-        
-        reward_better = self.mlp(emb_better)
-        reward_worse = self.mlp(emb_worse)
-        reward = torch.concat((reward_better, reward_worse), dim=1)
-        
-        return reward
+        prob_data = self.mlp(batch_data)
 
+        return prob_data
 
     def encode_pair(self, batch_data):
-        text_ids, text_mask, img_better, img_worse = batch_data['text_ids'], batch_data['text_mask'], batch_data['img_better'], batch_data['img_worse']
-        text_ids = text_ids.view(text_ids.shape[0], -1).to(self.device) # [batch_size, seq_len]
-        text_mask = text_mask.view(text_mask.shape[0], -1).to(self.device) # [batch_size, seq_len]
-        img_better = img_better.to(self.device) # [batch_size, C, H, W]
-        img_worse = img_worse.to(self.device) # [batch_size, C, H, W]
-        
+        text_ids, text_mask, img_1, img_2 = batch_data['text_ids'], batch_data['text_mask'], batch_data['img_1'], \
+                                            batch_data['img_2']
+        text_ids = text_ids.view(text_ids.shape[0], -1).to(self.device)  # [batch_size, seq_len]
+        text_mask = text_mask.view(text_mask.shape[0], -1).to(self.device)  # [batch_size, seq_len]
+        img_1 = img_1.to(self.device)  # [batch_size, C, H, W]
+        img_2 = img_2.to(self.device)  # [batch_size, C, H, W]
+
         # encode better emb
-        image_embeds_better = self.blip.visual_encoder(img_better)
-        image_atts_better = torch.ones(image_embeds_better.size()[:-1], dtype=torch.long).to(self.device)
-        emb_better = self.blip.text_encoder(text_ids,
-                                            attention_mask = text_mask,
-                                            encoder_hidden_states = image_embeds_better,
-                                            encoder_attention_mask = image_atts_better,
-                                            return_dict = True,
-                                           ).last_hidden_state # [batch_size, seq_len, feature_dim]
-        emb_better = emb_better[:, 0, :].float()
-        
-        # encode worse emb
-        image_embeds_worse = self.blip.visual_encoder(img_worse)
-        image_atts_worse = torch.ones(image_embeds_worse.size()[:-1], dtype=torch.long).to(self.device)
-        emb_worse = self.blip.text_encoder(text_ids,
-                                            attention_mask = text_mask,
-                                            encoder_hidden_states = image_embeds_worse,
-                                            encoder_attention_mask = image_atts_worse,
-                                            return_dict = True,
-                                           ).last_hidden_state
-        emb_worse = emb_worse[:, 0, :].float()
-        
+        img = torch.cat((img_1, img_2), 1)
+        inp = self.input_layer(img)
+        image_embeds = self.blip.visual_encoder(inp)
+        image_atts = torch.ones(image_embeds.size()[:-1], dtype=torch.long).to(self.device)
+        emb = self.blip.text_encoder(text_ids,
+                                     attention_mask=text_mask,
+                                     encoder_hidden_states=image_atts,
+                                     encoder_attention_mask=image_atts,
+                                     return_dict=True,
+                                     ).last_hidden_state  # [batch_size, seq_len, feature_dim]
+        emb = emb[:, 0, :].float()
+
         # get batch data
-        batch_data = {
-            'emb_better': emb_better,
-            'emb_worse': emb_worse,
-        }
+        batch_data = emb
 
         return batch_data
