@@ -44,7 +44,7 @@ paths = ['../files/0_500_pickscore_coco',
          '../files/diverse_coco_pick_3_per_prompt_1500_2000',
          '../files/diverse_coco_pick_3_per_prompt_2000_2500']
 df = parser.raw_to_df(paths, do_overlap=True, keep_no_info=False)
-train_df, test_df = train_test_split(df, test_size=0.2)
+train_df, test_df = train_test_split(df, test_size=0.2, random_state=0)
 dataset_train = DiversityDataset(train_df,
                                  local_path=None,
                                  preprocess=preprocess)
@@ -66,11 +66,17 @@ threshs = np.linspace(min(pred), max(pred), 10)
 for thresh in threshs:
     curr_pred = (np.array(pred) > thresh) * 1
     curr_pred = list(curr_pred.astype(int))
-    accs.append(samples_metric(true, curr_pred))
+    accs.append(accuracy_score(true, curr_pred))
 
 stupid = [0] * len(true)
-ac_stupid = samples_metric(true, stupid)
-true = np.array([not item for item in true]) * 1
+ac_stupid = accuracy_score(true, stupid)
+max_value = max(accs)
+
+found_thresh = threshs[accs.index(max_value)]
+pred_val, true_val = clip_baseline(dataset_test, factor)
+pred_val = (np.array(pred_val) > found_thresh) * 1
+pred_val = list(pred_val.astype(int))
+val_acc = accuracy_score(true_val, pred_val)
 
 fig, axes = plt.subplots(1, 1, figsize=(10, 5))
 metrics = ['accuracy']
@@ -79,7 +85,8 @@ stupid = [ac_stupid]
 for j in range(1):
     axes[j].set_title(metrics[j])
     axes[j].plot(threshs, values[j])
-    axes[j].axhline(stupid[j], color='r', linestyle='-')
+    axes[j].axhline(stupid[j], color='r', linestyle='-', label='majority class')
+    axes[j].axhline(val_acc, color='r', linestyle='-', label='validation')
 
 plt.suptitle(f'{factor}')
 plt.savefig(f'{factor}.png')

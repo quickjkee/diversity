@@ -16,6 +16,7 @@ opts.BatchSize = opts.batch_size * opts.accumulation_steps * opts.gpu_num
 from dataset import DiversityDataset
 from models.src.ImageReward import ImageReward
 from utils.parser import Parser
+from models.baseline_clip import preprocess
 
 # GLOBAL
 import torch
@@ -24,6 +25,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 from torch.backends import cudnn
+from sklearn.model_selection import train_test_split
 
 
 def std_log():
@@ -76,11 +78,16 @@ if __name__ == "__main__":
              '../files/diverse_coco_pick_3_per_prompt_1000_1500',
              '../files/diverse_coco_pick_3_per_prompt_1500_2000',
              '../files/diverse_coco_pick_3_per_prompt_2000_2500']
-    sbs = parser.raw_to_df(paths, do_overlap=True, keep_no_info=False)
+    df = parser.raw_to_df(paths, do_overlap=True, keep_no_info=False)
+    train_df, test_df = train_test_split(df, test_size=0.2, random_state=0)
 
-    train_dataset = DiversityDataset("train") # TODO
-    valid_dataset = DiversityDataset("valid")
-    test_dataset = DiversityDataset("test")
+    train_dataset = DiversityDataset(train_df,
+                                     local_path='/extra_disk_1/quickjkee/diversity_images',
+                                     preprocess=preprocess)
+    valid_dataset = DiversityDataset(test_df,
+                                     local_path='/extra_disk_1/quickjkee/diversity_images',
+                                     preprocess=preprocess)
+    test_dataset = valid_dataset
     
     if opts.distributed:
         train_sampler = DistributedSampler(train_dataset)
