@@ -1,46 +1,16 @@
 import sys
 sys.path.append('/home/quickjkee/diversity/models/src')
 
-
-import torch
 import numpy as np
 import matplotlib.pyplot as plt
 
-from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
-from torch.utils.data import WeightedRandomSampler
-from torch.utils.data import DataLoader, TensorDataset
 
 from utilss.parser import Parser
 from dataset import DiversityDataset
+from metrics import samples_metric
 from models.baseline_clip import preprocess, ClipBase
 #from models.baseline_blip import preprocess, BlipBase
-
-def samples_metric(true, pred, n_boots=30):
-    labels = set(true)
-    class_weights = {}
-    for label in labels:
-        class_weights[label] = 0
-        for el in true:
-            if el == label:
-                class_weights[label] += 1
-        class_weights[label] = 1 / class_weights[label]
-
-    sample_weights = [class_weights[item] for item in true]
-    idx = list(range(len(true)))
-    dataset = TensorDataset(torch.tensor(idx))
-    sampler = WeightedRandomSampler(weights=sample_weights, num_samples=len(true), replacement=True)
-    accs = []
-    for _ in range(n_boots):
-        dl = DataLoader(dataset, sampler=sampler, batch_size=len(true))
-        for item in dl:
-            item = item[0]
-            true_labels = [true[it.item()] for it in item]
-            pred_labels = [pred[it.item()] for it in item]
-            acc = accuracy_score(true_labels, pred_labels)
-            accs.append(acc)
-
-    return np.mean(accs), np.std(accs)
 
 parser = Parser()
 paths = ['files/0_500_pickscore_coco',

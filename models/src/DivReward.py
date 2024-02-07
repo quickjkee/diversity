@@ -1,5 +1,5 @@
 '''
-@File       :   ImageReward.py
+@File       :   DivReward.py
 @Time       :   2023/02/28 19:53:00
 @Auther     :   Jiazheng Xu
 @Contact    :   xjz22@mails.tsinghua.edu.cn
@@ -24,20 +24,6 @@ except ImportError:
     BICUBIC = Image.BICUBIC
 
 
-def _convert_image_to_rgb(image):
-    return image.convert("RGB")
-
-
-def _transform(n_px):
-    return Compose([
-        Resize(n_px, interpolation=BICUBIC),
-        CenterCrop(n_px),
-        _convert_image_to_rgb,
-        ToTensor(),
-        Normalize((0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711)),
-    ])
-
-
 class MLP(nn.Module):
     def __init__(self, input_size):
         super().__init__()
@@ -45,16 +31,16 @@ class MLP(nn.Module):
 
         self.layers = nn.Sequential(
             nn.Linear(2 * self.input_size, 1024),
-#            nn.ReLU(),
+            #nn.ReLU(),
             nn.Dropout(0.2),
             nn.Linear(1024, 128),
-#            nn.ReLU(),
+            #nn.ReLU(),
             nn.Dropout(0.2),
             nn.Linear(128, 64),
-#            nn.ReLU(),
+            #nn.ReLU(),
             nn.Dropout(0.1),
             nn.Linear(64, 16),
-#            nn.ReLU(),
+            #nn.ReLU(),
             nn.Linear(16, 2),
         )
 
@@ -69,14 +55,13 @@ class MLP(nn.Module):
         return self.layers(input)
 
 
-class ImageReward(nn.Module):
-    def __init__(self, device='cpu'):
+class DivReward(nn.Module):
+    def __init__(self):
         super().__init__()
-        self.device = device
+        self.device = 'cpu'
 
         self.blip = blip_pretrain(pretrained=config['blip_path'], image_size=config['BLIP']['image_size'],
                                   vit=config['BLIP']['vit'])
-        self.preprocess = _transform(config['BLIP']['image_size'])
         self.mlp = MLP(config['ImageReward']['mlp_dim'])
 
         if opts.fix_base:
@@ -134,22 +119,22 @@ class ImageReward(nn.Module):
         image_embeds_1 = self.blip.visual_encoder(img_1)
         image_atts_1 = torch.ones(image_embeds_1.size()[:-1], dtype=torch.long).to(self.device)
         emb_1 = self.blip.text_encoder(text_ids,
-                                     attention_mask=text_mask,
-                                     encoder_hidden_states=image_embeds_1,
-                                     encoder_attention_mask=image_atts_1,
-                                     return_dict=True,
-                                     ).last_hidden_state  # [batch_size, seq_len, feature_dim]
+                                       attention_mask=text_mask,
+                                       encoder_hidden_states=image_embeds_1,
+                                       encoder_attention_mask=image_atts_1,
+                                       return_dict=True,
+                                       ).last_hidden_state  # [batch_size, seq_len, feature_dim]
         emb_1 = emb_1[:, 0, :].float()
 
         # encode better emb
         image_embeds_2 = self.blip.visual_encoder(img_2)
         image_atts_2 = torch.ones(image_embeds_2.size()[:-1], dtype=torch.long).to(self.device)
         emb_2 = self.blip.text_encoder(text_ids,
-                                     attention_mask=text_mask,
-                                     encoder_hidden_states=image_embeds_2,
-                                     encoder_attention_mask=image_atts_2,
-                                     return_dict=True,
-                                     ).last_hidden_state  # [batch_size, seq_len, feature_dim]
+                                       attention_mask=text_mask,
+                                       encoder_hidden_states=image_embeds_2,
+                                       encoder_attention_mask=image_atts_2,
+                                       return_dict=True,
+                                       ).last_hidden_state  # [batch_size, seq_len, feature_dim]
         emb_2 = emb_2[:, 0, :].float()
 
         # get batch data
