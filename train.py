@@ -5,6 +5,10 @@
 @Contact    :   xjz22@mails.tsinghua.edu.cn
 @Description:   Train reward model.
 '''
+import sys
+sys.path.append(f'/home/quickjkee/diversity/models/src/config')
+sys.path.append(f'/home/quickjkee/diversity/models/src')
+sys.path.append(f'/home/quickjkee/diversity/models')
 
 # LOCAL
 from models.src.config.options import *
@@ -20,6 +24,7 @@ from models.baseline_clip import preprocess
 
 # GLOBAL
 import torch
+import torch.nn as nn
 import sys
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
@@ -46,10 +51,11 @@ def init_seeds(seed, cuda_deterministic=True):
 
 
 def loss_func(predict, target):
-    loss_list = F.binary_cross_entropy(predict, target, reduction='none')
-    loss = torch.mean(loss_list)
-    labels_pred = (predict > 0.5) * 1.0
-    acc = (labels_pred == target).sum().clone().detach().float()
+    loss = nn.CrossEntropyLoss(reduction='none')
+    loss_list = loss(predict, target)
+    loss = torch.mean(loss_list, dim=0)
+    correct = torch.eq(torch.max(F.softmax(predict, dim=1), dim=1)[1], target).view(-1)
+    acc = torch.sum(correct).item() / len(target)
     
     return loss, loss_list, acc
 
@@ -73,11 +79,11 @@ if __name__ == "__main__":
     writer = visualizer()
 
     parser = Parser()
-    paths = ['../files/0_500_pickscore_coco',
-             '../files/diverse_coco_pick_3_per_prompt_500_1000.out',
-             '../files/diverse_coco_pick_3_per_prompt_1000_1500',
-             '../files/diverse_coco_pick_3_per_prompt_1500_2000',
-             '../files/diverse_coco_pick_3_per_prompt_2000_2500']
+    paths = ['files/0_500_pickscore_coco',
+             'files/diverse_coco_pick_3_per_prompt_500_1000.out',
+             'files/diverse_coco_pick_3_per_prompt_1000_1500',
+             'files/diverse_coco_pick_3_per_prompt_1500_2000',
+             'files/diverse_coco_pick_3_per_prompt_2000_2500']
     df = parser.raw_to_df(paths, do_overlap=True, keep_no_info=False)
     train_df, test_df = train_test_split(df, test_size=0.2, random_state=0)
 
@@ -102,15 +108,16 @@ if __name__ == "__main__":
     opts.train_iters = opts.epochs * len(train_loader)
     steps_per_valid = len(train_loader) // opts.valid_per_epoch
     print("len(train_dataset) = ", len(train_dataset))
-    print("train_dataset.iters_per_epoch = ", train_dataset.iters_per_epoch)
     print("len(train_loader) = ", len(train_loader))
+    print("len(test_dataset) = ", len(test_dataset))
+    print("len(test_loader) = ", len(test_loader))
     print("steps_per_valid = ", steps_per_valid)
 
     model = ImageReward(device).to(device)
     
     if opts.preload_path:
         model = preload_model(model)
-    
+    print(opts.lr)
     optimizer = torch.optim.Adam(model.parameters(), lr=opts.lr, betas=(opts.adam_beta1, opts.adam_beta2), eps=opts.adam_eps)
     scheduler = get_learning_rate_scheduler(optimizer, opts)
     if opts.distributed:
@@ -128,7 +135,7 @@ if __name__ == "__main__":
                 target = batch_data_package['background'].to(device)
                 loss, loss_list, acc = loss_func(predict, target)
                 valid_loss.append(loss_list)
-                valid_acc_list.append(acc.item())
+                valid_acc_list.append(acc)
     
         # record valid and save best model
         valid_loss = torch.cat(valid_loss, 0)
@@ -137,7 +144,7 @@ if __name__ == "__main__":
         writer.add_scalar('Validation-Acc', sum(valid_acc_list) / len(valid_acc_list), global_step=0)
             
 
-    best_loss = 1e9
+    best_acc = 0
     optimizer.zero_grad()
     # fix_rate_list = [float(i) / 10 for i in reversed(range(10))]
     # fix_epoch_edge = [opts.epochs / (len(fix_rate_list)+1) * i for i in range(1, len(fix_rate_list)+1)]
@@ -157,7 +164,7 @@ if __name__ == "__main__":
             loss.backward()
 
             losses.append(loss_list)
-            acc_list.append(acc.item())
+            acc_list.append(acc)
 
             iterations = epoch * len(train_loader) + step + 1
             train_iteration = iterations / opts.accumulation_steps
@@ -191,18 +198,18 @@ if __name__ == "__main__":
                             target = batch_data_package['background'].to(device)
                             loss, loss_list, acc = loss_func(predict, target)
                             valid_loss.append(loss_list)
-                            valid_acc_list.append(acc.item())
+                            valid_acc_list.append(acc)
                 
                     # record valid and save best model
-                    valid_loss = torch.cat(valid_loss, 0)
+                    valid_acc = torch.cat(valid_acc_list, 0)
                     print('Validation - Iteration %d | Loss %6.5f | Acc %6.4f' % (train_iteration, torch.mean(valid_loss), sum(valid_acc_list) / len(valid_acc_list)))
                     writer.add_scalar('Validation-Loss', torch.mean(valid_loss), global_step=train_iteration)
                     writer.add_scalar('Validation-Acc', sum(valid_acc_list) / len(valid_acc_list), global_step=train_iteration)
                         
-                    if torch.mean(valid_loss) < best_loss:
-                        print("Best Val loss so far. Saving model")
-                        best_loss = torch.mean(valid_loss)
-                        print("best_loss = ", best_loss)
+                    if torch.mean(valid_acc) > best_acc:
+                        print("Best Acc so far. Saving model")
+                        best_acc = torch.mean(valid_acc)
+                        print("best_acc = ", best_acc)
                         save_model(model)
 
     # test model
@@ -216,10 +223,11 @@ if __name__ == "__main__":
         acc_list = []
         with torch.no_grad():
             for step, batch_data_package in enumerate(test_loader):
-                reward = model(batch_data_package)
-                loss, loss_list, acc = loss_func(reward)
+                predict = model(batch_data_package)
+                target = batch_data_package['background'].to(device)
+                loss, loss_list, acc = loss_func(predict, target)
                 test_loss.append(loss_list)
-                acc_list.append(acc.item())
+                acc_list.append(acc)
 
         test_loss = torch.cat(test_loss, 0)
         print('Test Loss %6.5f | Acc %6.4f' % (torch.mean(test_loss), sum(acc_list) / len(acc_list)))

@@ -1,11 +1,14 @@
 import open_clip
 import torch
 import torch.nn.functional as F
+from dreamsim import dreamsim
+from tqdm import tqdm
 
-model, _, preprocess = open_clip.create_model_and_transforms('ViT-B-32', pretrained='laion2b_s34b_b79k')
-tokenizer = open_clip.get_tokenizer('ViT-B-32')
+model, preprocess = dreamsim(pretrained=True, dreamsim_type="open_clip_vitl14")
+#model, _, preprocess = open_clip.create_model_and_transforms('ViT-H-14-378-quickgelu', pretrained='dfn5b')
+tokenizer = open_clip.get_tokenizer('ViT-H-14-378-quickgelu')
 model.to('cuda')
-
+print(preprocess)
 class ClipBase:
 
     def __init__(self):
@@ -15,12 +18,12 @@ class ClipBase:
     def _predict(self, item, factor):
         # img1
         image_1 = item['image_1'].to('cuda')
-        image_features_1 = model.encode_image(image_1)
+        image_features_1 = model.embed(image_1)
         image_features_1 /= image_features_1.norm(dim=-1, keepdim=True)
 
         # img2
         image_2 = item['image_2'].to('cuda')
-        image_features_2 = model.encode_image(image_2)
+        image_features_2 = model.embed(image_2)
         image_features_2 /= image_features_1.norm(dim=-1, keepdim=True)
 
         # similarity
@@ -32,7 +35,7 @@ class ClipBase:
     def __call__(self, dataset, factor):
         preds = []
         trues = []
-        for batch in dataset:
+        for batch in tqdm(dataset):
             pred, true = self._predict(batch, factor)
             preds.append(pred)
             trues.append(true)
