@@ -1,7 +1,5 @@
-import torch
 from sklearn.model_selection import train_test_split
 
-from models.src.config.options import *
 from utilss.parser import Parser
 from dataset import DiversityDataset
 from models.src.DivReward import DivReward
