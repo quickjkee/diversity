@@ -1,6 +1,6 @@
 from sklearn.model_selection import train_test_split
 
-from utilss.parser import Parser
+from utils.parser import Parser
 from dataset import DiversityDataset
 from models.src.DivReward import DivReward
 from train import run_train

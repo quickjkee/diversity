@@ -4,10 +4,11 @@ import torch.nn.functional as F
 from dreamsim import dreamsim
 from tqdm import tqdm
 
-model, preprocess = dreamsim(pretrained=True, dreamsim_type="open_clip_vitl14")
+model, preprocess = dreamsim(pretrained=True, dreamsim_type="open_clip_vitb32", device='cpu')
+print(model.extractor_list)
 #model, _, preprocess = open_clip.create_model_and_transforms('ViT-H-14-378-quickgelu', pretrained='dfn5b')
-tokenizer = open_clip.get_tokenizer('ViT-H-14-378-quickgelu')
-model.to('cuda')
+#tokenizer = open_clip.get_tokenizer('ViT-H-14-378-quickgelu')
+#model.to('cuda')
 print(preprocess)
 class ClipBase:
 
