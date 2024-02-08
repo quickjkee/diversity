@@ -13,9 +13,9 @@ paths = ['../files/0_500_pickscore_coco',
          '../files/diverse_coco_pick_3_per_prompt_2000_2500']
 
 # Turn into dataframe, where each row it is a single vote
+df = parser.raw_to_df(paths, do_overlap=True, keep_no_info=False)
 # do_overlap - overlap over annotators or no
 # keep_no_info - delete -1 or on
-df = parser.raw_to_df(paths, do_overlap=True, keep_no_info=False)
 ```
 
 You can also check ```third_party/histograms.py``` for plots creating.
