@@ -41,18 +41,10 @@ backbone = blip_pretrain(pretrained=config['blip_path'], image_size=config['BLIP
                          vit=config['BLIP']['vit'])
 
 
-######################
 use_lora = True
-
-# FOR DREAMSIMSIM
-#backbone.visual_encoder = model.extractor_list[0].model
 
 # FOR BLIP
 model = backbone.visual_encoder
-
-# FOR OPENCLIP
-#model = model.visual
-#model.pool_type = 'none'
 
 if use_lora:
     lora_config =  {
@@ -64,25 +56,9 @@ if use_lora:
              }
     lora_config = LoraConfig(**lora_config)
     model = get_peft_model(ViTModel(model, ViTConfig()), lora_config)
-##########################
 
 backbone.visual_encoder = model
 backbone.visual_encoder.requires_grad_(True)
-
-######### TEXT
-#text_encoder = backbone.text_encoder
-#for name, parms in text_encoder.named_parameters():
-#    print(name)
-#lora_config =  {
-#            "r": 32,
-#            "lora_alpha": 5,
-#            "lora_dropout": 0.1,
-#            "bias": "none",
-#            "target_modules": ['query', 'value', 'key']
-#             }
-#lora_config = LoraConfig(**lora_config)
-#text_encoder = get_peft_model(text_encoder, lora_config)
-#backbone.text_encoder = text_encoder
 
 main_model = DivReward(backbone, img_lora=use_lora)
 
