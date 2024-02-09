@@ -60,8 +60,7 @@ class DivReward(nn.Module):
         super().__init__()
         self.device = 'cpu'
 
-        self.blip = backbone #blip_pretrain(pretrained=config['blip_path'], image_size=config['BLIP']['image_size'],
-                    #              vit=config['BLIP']['vit'])
+        self.blip = backbone
         self.mlp = MLP(config['ImageReward']['mlp_dim']).requires_grad_(True)
 
         if opts.fix_base:

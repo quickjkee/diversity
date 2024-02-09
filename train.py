@@ -21,14 +21,94 @@ opts.BatchSize = opts.batch_size * opts.accumulation_steps * opts.gpu_num
 
 # GLOBAL
 import torch
+import math
 import numpy as np
 import torch.nn as nn
 import sys
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
-from torch.utils.data.distributed import DistributedSampler
+from torch.utils.data.distributed import DistributedSampler, Sampler
 from torch.backends import cudnn
 from metrics import samples_metric
+
+class DistributedWeightedSampler(Sampler):
+    """
+    A class for distributed data sampling with weights.
+
+    .. note::
+
+        For this to work correctly, global seed must be set to be the same across
+        all devices.
+
+    :param weights: A list of weights to sample with.
+    :type weights: list
+    :param num_samples: Number of samples in the dataset.
+    :type num_samples: int
+    :param replacement: Do we sample with or without replacement.
+    :type replacement: bool
+    :param num_replicas: Number of processes running training.
+    :type num_replicas: int
+    :param rank: Current device number.
+    :type rank: int
+    """
+
+    def __init__(
+        self,
+        weights: list,
+        replacement: bool = True,
+        num_replicas: int = None,
+    ):
+        if num_replicas is None:
+            num_replicas = torch.cuda.device_count()
+
+        self.num_replicas = num_replicas
+        self.num_samples_per_replica = int(
+            math.ceil(len(weights) * 1.0 / self.num_replicas)
+        )
+        self.total_num_samples = self.num_samples_per_replica * self.num_replicas
+        self.weights = weights
+        self.replacement = replacement
+
+    def __iter__(self):
+        """
+        Produces mini sample list for current rank.
+
+        :returns: A generator of samples.
+        :rtype: Generator
+        """
+        rank = os.environ["LOCAL_RANK"]
+
+        if rank >= self.num_replicas or rank < 0:
+            raise ValueError(
+                "Invalid rank {}, rank should be in "
+                "the interval [0, {}]".format(rank, self.num_replicas - 1)
+            )
+
+        weights = self.weights.copy()
+        # add extra samples to make it evenly divisible
+        weights += weights[: (self.total_num_samples) - len(weights)]
+        if not len(weights) == self.total_num_samples:
+            raise RuntimeError(
+                "There is a distributed sampler error. Num weights: {}, total size: {}".format(
+                    len(weights), self.total_size
+                )
+            )
+
+        # subsample for this rank
+        weights = weights[rank : self.total_num_samples : self.num_replicas]
+        weights_used = [0] * self.total_num_samples
+        weights_used[rank : self.total_num_samples : self.num_replicas] = weights
+
+        return iter(
+            torch.multinomial(
+                input=torch.as_tensor(weights_used, dtype=torch.double),
+                num_samples=self.num_samples_per_replica,
+                replacement=self.replacement,
+            ).tolist()
+        )
+
+    def __len__(self):
+        return self.num_samples_per_replica
 
 
 def std_log():
@@ -60,7 +140,9 @@ def loss_func(predict, target):
 
 def run_train(train_dataset,
               valid_dataset,
-              model):
+              model,
+              label,
+              weights=None):
     if opts.std_log:
         std_log()
 
@@ -82,7 +164,10 @@ def run_train(train_dataset,
     test_dataset = valid_dataset
 
     if opts.distributed:
-        train_sampler = DistributedSampler(train_dataset)
+        if weights is None:
+            train_sampler = DistributedSampler(train_dataset)
+        else:
+            train_sampler = DistributedWeightedSampler(weights)
         train_loader = DataLoader(train_dataset, batch_size=opts.batch_size, sampler=train_sampler,
                                   collate_fn=collate_fn if not opts.rank_pair else None)
     else:
@@ -121,7 +206,7 @@ def run_train(train_dataset,
         with torch.no_grad():
             for step, batch_data_package in enumerate(valid_loader):
                 predict = model(batch_data_package)
-                target = batch_data_package['background'].to(device)
+                target = batch_data_package[label].to(device)
                 loss, loss_list, acc = loss_func(predict, target)
 
                 labels_preds.append(torch.max(F.softmax(predict, dim=1), dim=1)[1].cpu().view(-1))
@@ -152,7 +237,7 @@ def run_train(train_dataset,
         for step, batch_data_package in enumerate(train_loader):
             model.train()
             predict = model(batch_data_package)
-            target = batch_data_package['background'].to(device)
+            target = batch_data_package[label].to(device)
             loss, loss_list, acc = loss_func(predict, target)
             # loss regularization
             loss = loss / opts.accumulation_steps
@@ -194,7 +279,7 @@ def run_train(train_dataset,
                     with torch.no_grad():
                         for step, batch_data_package in enumerate(valid_loader):
                             predict = model(batch_data_package)
-                            target = batch_data_package['background'].to(device)
+                            target = batch_data_package[label].to(device)
                             loss, loss_list, acc = loss_func(predict, target)
 
                             labels_preds.append(torch.max(F.softmax(predict, dim=1), dim=1)[1].cpu().view(-1))
@@ -234,7 +319,7 @@ def run_train(train_dataset,
         with torch.no_grad():
             for step, batch_data_package in enumerate(test_loader):
                 predict = model(batch_data_package)
-                target = batch_data_package['background'].to(device)
+                target = batch_data_package[label].to(device)
                 loss, loss_list, acc = loss_func(predict, target)
 
                 labels_preds.append(torch.max(F.softmax(predict, dim=1), dim=1)[1].cpu().view(-1))
