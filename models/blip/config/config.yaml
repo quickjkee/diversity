@@ -1,6 +1,6 @@
 # ckpt/config options(static)
 blip_path: https://storage.googleapis.com/sfr-vision-language-research/BLIP/models/model_large.pth
-med_config: models/src/config/med_config.json
+med_config: models/blip/config/med_config.json
 
 # ckpt/logger options(dynamic)
 checkpoint_base: checkpoint

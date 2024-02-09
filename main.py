@@ -1,12 +1,12 @@
 import sys
-sys.path.append('/home/quickjkee/diversity/models/src')
-sys.path.append(f'/home/quickjkee/diversity/models/src/config')
+sys.path.append('/home/quickjkee/diversity/models/blip')
+sys.path.append(f'/home/quickjkee/diversity/models/blip/config')
 sys.path.append(f'/home/quickjkee/diversity/models')
 
-from models.src.config.options import *
-from models.src.config.utils import *
-from models.lora_wrapper import ViTConfig, ViTModel
-from peft import PeftModel, LoraConfig, get_peft_model
+from models.blip.config.options import *
+from models.blip.config.utils import *
+from utilss.lora_wrapper import ViTConfig, ViTModel
+from peft import LoraConfig, get_peft_model
 
 os.environ['CUDA_VISIBLE_DEVICES'] = opts.gpu_id
 opts.BatchSize = opts.batch_size * opts.accumulation_steps * opts.gpu_num
@@ -15,10 +15,8 @@ from sklearn.model_selection import train_test_split
 
 from utilss.parser import Parser
 from dataset import DiversityDataset
-from models.src.DivReward import DivReward
+from models.blip.DivReward import DivReward
 from train import run_train
-from models.baseline_blip import blip_pretrain
-
 
 #from models.baseline_clip import preprocess, model
 from models.baseline_blip import blip_pretrain, preprocess
