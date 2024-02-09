@@ -151,7 +151,7 @@ class DivReward(nn.Module):
         # encode better emb
         image_embeds_1 = self.blip.visual_encoder(img_1)
         #image_atts_1 = torch.ones(image_embeds_1.size()[:-1], dtype=torch.long).to(self.device)
-        #emb_1 = self.blip_reward.text_encoder(text_ids,
+        #emb_1 = self.src.text_encoder(text_ids,
         #                               attention_mask=text_mask,
         #                               encoder_hidden_states=image_embeds_1,
         #                               encoder_attention_mask=image_atts_1,

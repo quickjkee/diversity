@@ -1,6 +1,6 @@
-from models.blip_reward.config.options import *
-from models.blip_reward.config.utils import *
-from models.blip_reward.models.blip_pretrain import blip_pretrain
+from models.src.config.options import *
+from models.src.config.utils import *
+from models.src.models.blip_pretrain import blip_pretrain
 from torchvision.transforms import Compose, Resize, CenterCrop, ToTensor, Normalize
 from PIL import Image
 from transformers import BertTokenizer

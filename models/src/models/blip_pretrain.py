@@ -11,7 +11,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-from models.blip_reward import create_vit, init_tokenizer, load_checkpoint
+from models.src import create_vit, init_tokenizer, load_checkpoint
 from config.options import *
 from config.utils import *
 

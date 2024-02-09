@@ -1,11 +1,11 @@
 import sys
 
-sys.path.append('/home/quickjkee/diversity/models/blip_reward')
-sys.path.append(f'/home/quickjkee/diversity/models/blip_reward/config')
+sys.path.append('/home/quickjkee/diversity/models/src')
+sys.path.append(f'/home/quickjkee/diversity/models/src/config')
 sys.path.append(f'/home/quickjkee/diversity/models')
 
-from models.blip_reward.config.options import *
-from models.blip_reward.config.utils import *
+from models.src.config.options import *
+from models.src.config.utils import *
 from utilss.lora_wrapper import ViTConfig, ViTModel
 from peft import LoraConfig, get_peft_model
 
@@ -16,7 +16,7 @@ from sklearn.model_selection import train_test_split
 
 from utilss.parser import Parser
 from dataset import DiversityDataset
-from models.blip_reward.DivReward import DivReward
+from models.src.DivReward import DivReward
 from train import run_train
 
 # from models.baseline_clip import preprocess, model

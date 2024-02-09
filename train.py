@@ -12,9 +12,9 @@ sys.path.append(f'/home/quickjkee/diversity/models/src')
 sys.path.append(f'/home/quickjkee/diversity/models')
 
 # LOCAL
-from models.blip_reward.config.options import *
-from models.blip_reward.config.utils import *
-from models.blip_reward.config.learning_rates import get_learning_rate_scheduler
+from models.src.config.options import *
+from models.src.config.utils import *
+from models.src.config.learning_rates import get_learning_rate_scheduler
 
 os.environ['CUDA_VISIBLE_DEVICES'] = opts.gpu_id
 opts.BatchSize = opts.batch_size * opts.accumulation_steps * opts.gpu_num
