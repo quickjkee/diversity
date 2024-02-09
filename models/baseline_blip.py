@@ -40,7 +40,7 @@ def init_tokenizer():
 model = blip_pretrain(pretrained=config['blip_path'], image_size=config['BLIP']['image_size'],
                       vit=config['BLIP']['vit']).to('cuda')
 preprocess = _transform()
-
+tokenizer = init_tokenizer()
 
 class BlipBase:
 

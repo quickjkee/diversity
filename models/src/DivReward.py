@@ -30,7 +30,7 @@ class MLP(nn.Module):
         self.input_size = input_size
 
         self.layers = nn.Sequential(
-            nn.Linear(2 * self.input_size, 1024),
+            nn.Linear(self.input_size, 1024),
             #nn.ReLU(),
             nn.Dropout(0.2),
             nn.Linear(1024, 128),
@@ -56,13 +56,13 @@ class MLP(nn.Module):
 
 
 class DivReward(nn.Module):
-    def __init__(self):
+    def __init__(self, backbone, img_lora=False, txt_lora=False):
         super().__init__()
         self.device = 'cpu'
 
-        self.blip = blip_pretrain(pretrained=config['blip_path'], image_size=config['BLIP']['image_size'],
-                                  vit=config['BLIP']['vit'])
-        self.mlp = MLP(config['ImageReward']['mlp_dim'])
+        self.blip = backbone #blip_pretrain(pretrained=config['blip_path'], image_size=config['BLIP']['image_size'],
+                    #              vit=config['BLIP']['vit'])
+        self.mlp = MLP(config['ImageReward']['mlp_dim']).requires_grad_(True)
 
         if opts.fix_base:
             self.blip.requires_grad_(False)
@@ -71,19 +71,53 @@ class DivReward(nn.Module):
             if '_proj' in name:
                 parms.requires_grad_(False)
 
-        # fix certain ratio of layers
-        self.image_layer_num = 24 if config['BLIP']['vit'] == 'large' else 12
-        if opts.fix_rate > 0:
-            text_fix_num = "layer.{}".format(int(12 * opts.fix_rate))
-            image_fix_num = "blocks.{}".format(int(self.image_layer_num * opts.fix_rate))
-            for name, parms in self.blip.text_encoder.named_parameters():
-                parms.requires_grad_(False)
-                if text_fix_num in name:
-                    break
+        if img_lora:
+            self.blip.visual_encoder.requires_grad_(False)
             for name, parms in self.blip.visual_encoder.named_parameters():
-                parms.requires_grad_(False)
-                if image_fix_num in name:
-                    break
+                if 'lora' in name:
+                    parms.requires_grad_(True)
+
+        if txt_lora:
+            self.blip.text_encoder.requires_grad_(False)
+            for name, parms in self.blip.text_encoder.named_parameters():
+                if 'lora' in name:
+                    parms.requires_grad_(True)
+
+        if not img_lora:
+            # fix certain ratio of layers
+            self.image_layer_num = 24 if config['BLIP']['vit'] == 'large' else 12
+            if opts.fix_rate > 0:
+                image_fix_num = "blocks.{}".format(int(self.image_layer_num * opts.fix_rate))
+                for name, parms in self.blip.visual_encoder.named_parameters():
+                    parms.requires_grad_(False)
+                    if image_fix_num in name:
+                        break
+
+        if not txt_lora:
+            self.image_layer_num = 24 if config['BLIP']['vit'] == 'large' else 12
+            if opts.fix_rate > 0:
+                text_fix_num = "layer.{}".format(int(12 * opts.fix_rate))
+                for name, parms in self.blip.text_encoder.named_parameters():
+                    parms.requires_grad_(False)
+                    if text_fix_num in name:
+                        break
+
+        all = 0
+        trainable = 0
+        for name, parms in self.blip.visual_encoder.named_parameters():
+            all += 1
+            if parms.requires_grad:
+                trainable += 1
+        print(f'Visual trainable layers {trainable}/{all}')
+
+        all = 0
+        trainable = 0
+        for name, parms in self.blip.text_encoder.named_parameters():
+            all += 1
+            if parms.requires_grad:
+                trainable += 1
+
+        print(f'Text trainable layers {trainable}/{all}')
 
     def loose_layer(self, fix_rate):
         text_layer_id = [f"layer.{id}" for id in range(int(12 * fix_rate), 13)]
@@ -101,8 +135,8 @@ class DivReward(nn.Module):
 
         # encode data
         batch_data = self.encode_pair(batch_data)
-        emb_1, emb_2 = batch_data['emb_1'], batch_data['emb_2']
-        inp = torch.concat((emb_1, emb_2), dim=1)
+        emb_text = batch_data['emb_text']
+        inp = emb_text #torch.concat((emb_text, emb_img), dim=1)
         # forward
         prob_data = self.mlp(inp)
         return prob_data
@@ -117,27 +151,28 @@ class DivReward(nn.Module):
 
         # encode better emb
         image_embeds_1 = self.blip.visual_encoder(img_1)
-        image_atts_1 = torch.ones(image_embeds_1.size()[:-1], dtype=torch.long).to(self.device)
-        emb_1 = self.blip.text_encoder(text_ids,
-                                       attention_mask=text_mask,
-                                       encoder_hidden_states=image_embeds_1,
-                                       encoder_attention_mask=image_atts_1,
-                                       return_dict=True,
-                                       ).last_hidden_state  # [batch_size, seq_len, feature_dim]
-        emb_1 = emb_1[:, 0, :].float()
+        #image_atts_1 = torch.ones(image_embeds_1.size()[:-1], dtype=torch.long).to(self.device)
+        #emb_1 = self.blip.text_encoder(text_ids,
+        #                               attention_mask=text_mask,
+        #                               encoder_hidden_states=image_embeds_1,
+        #                               encoder_attention_mask=image_atts_1,
+        #                               return_dict=True,
+        #                               ).last_hidden_state  # [batch_size, seq_len, feature_dim]
+        #emb_1 = emb_1[:, 0, :].float()
 
         # encode better emb
         image_embeds_2 = self.blip.visual_encoder(img_2)
-        image_atts_2 = torch.ones(image_embeds_2.size()[:-1], dtype=torch.long).to(self.device)
+        image_embeds = torch.cat((image_embeds_1, image_embeds_2), 1)
+        image_atts_2 = torch.ones(image_embeds.size()[:-1], dtype=torch.long).to(self.device)
         emb_2 = self.blip.text_encoder(text_ids,
                                        attention_mask=text_mask,
-                                       encoder_hidden_states=image_embeds_2,
+                                       encoder_hidden_states=image_embeds,
                                        encoder_attention_mask=image_atts_2,
                                        return_dict=True,
                                        ).last_hidden_state  # [batch_size, seq_len, feature_dim]
         emb_2 = emb_2[:, 0, :].float()
 
         # get batch data
-        batch_data = {'emb_1': emb_1, 'emb_2': emb_2}
+        batch_data = {'emb_text': emb_2}
 
         return batch_data

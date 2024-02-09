@@ -1,7 +1,7 @@
 Parse the results:
 
 ```Python
-from utils.parser import Parser
+from utilss.parser import Parser
 
 parser = Parser()
 

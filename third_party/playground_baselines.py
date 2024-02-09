@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 from sklearn.model_selection import train_test_split
 
-from utils.parser import Parser
+from utilss.parser import Parser
 from dataset import DiversityDataset
 from metrics import samples_metric
 from models.baseline_clip import preprocess, ClipBase

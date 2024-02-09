@@ -10,7 +10,7 @@ train_options=" \
        --epochs 10 \
        --distributed True \
        --gpu_num ${NUM_GPUS_PER_WORKER} \
-       --gpu_id '2,3,4,5' \
+       --gpu_id '0,2,3,7' \
        --clear_visualizer \
        --fix_rate 0.7 \
        --lr 1e-04 \
@@ -26,7 +26,7 @@ run_cmd="torchrun
         --nnodes=1
         --nproc_per_node=${NUM_GPUS_PER_WORKER}
         --master_port=${MASTER_PORT}
-        train.py ${train_options}"
+        main.py ${train_options}"
 
 echo ${run_cmd}
 eval ${run_cmd}

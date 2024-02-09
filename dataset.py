@@ -50,19 +50,21 @@ def init_tokenizer():
 
 class DiversityDataset(Dataset):
 
-    def __init__(self, df, local_path=None, preprocess=None):
+    def __init__(self, df, tokenizer=None, local_path=None, preprocess=None):
         if preprocess is None:
             preprocess = _transform(224)
         if local_path is None:
             print('Dataset will be loaded from urls')
         else:
             print(f'Dataset downloaded locally in {local_path}')
+        if tokenizer is None:
+            tokenizer = init_tokenizer()
 
         self.local_path = local_path
 
         self.preprocess = preprocess
         self.df = df
-        self.tokenizer = init_tokenizer()
+        self.tokenizer = tokenizer #init_tokenizer()
         self.data = self.make_data()
 
     def __getitem__(self, index):

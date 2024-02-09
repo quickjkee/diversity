@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-from utils.parser import Parser
+from utilss.parser import Parser
 
 parser = Parser()
 paths = ['../files/0_500_pickscore_coco',

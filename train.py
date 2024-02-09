@@ -105,7 +105,6 @@ def run_train(train_dataset,
 
     if opts.preload_path:
         model = preload_model(model)
-    print(opts.lr)
     optimizer = torch.optim.Adam(model.parameters(), lr=opts.lr, betas=(opts.adam_beta1, opts.adam_beta2),
                                  eps=opts.adam_eps)
     scheduler = get_learning_rate_scheduler(optimizer, opts)
@@ -204,6 +203,7 @@ def run_train(train_dataset,
                             valid_acc_list.append(acc)
 
                     # record valid and save best model
+                    valid_loss = torch.cat(valid_loss, 0)
                     labels_preds = np.array(torch.cat(labels_preds, 0))
                     labels_true = np.array(torch.cat(labels_true, 0))
                     boots_acc = samples_metric(labels_true, labels_preds)[0]
