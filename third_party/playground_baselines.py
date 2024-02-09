@@ -1,5 +1,5 @@
 import sys
-sys.path.append('/home/quickjkee/diversity/models/blip')
+sys.path.append('/home/quickjkee/diversity/models/blip_reward')
 
 import numpy as np
 import matplotlib.pyplot as plt
