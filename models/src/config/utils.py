@@ -9,7 +9,8 @@
 #encoding:utf-8
 import os, shutil
 import torch
-from tensorboardX import SummaryWriter
+#from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 from config.options import *
 import torch.distributed as dist
 
@@ -86,5 +87,5 @@ def visualizer():
         if opts.clear_visualizer and os.path.exists(filewriter_path):   # 删掉以前的summary，以免重合
             shutil.rmtree(filewriter_path)
         makedir(filewriter_path)
-        writer = SummaryWriter(filewriter_path, comment='visualizer')
+        writer = SummaryWriter(filewriter_path, comment='visualizer', max_queue=1, flush_secs=1)
         return writer

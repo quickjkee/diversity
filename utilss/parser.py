@@ -35,6 +35,10 @@ class Parser:
             inp = list(inp)
             max_val = max(Counter(inp).values())
             if max_val == 1 and isinstance(inp[0], int):
+                #diff_val = self.keys['same']
+                #if diff_val == max_val:
+                #    return diff_val
+                #else:
                 return -1
             else:
                 return max(set(inp), key=inp.count)

@@ -1,6 +1,6 @@
 import sys
 sys.path.append('/home/quickjkee/diversity/models/src')
-
+sys.path.append('/home/quickjkee/diversity')
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -17,7 +17,9 @@ paths = ['files/0_500_pickscore_coco',
          'files/diverse_coco_pick_3_per_prompt_500_1000.out',
          'files/diverse_coco_pick_3_per_prompt_1000_1500',
          'files/diverse_coco_pick_3_per_prompt_1500_2000',
-         'files/diverse_coco_pick_3_per_prompt_2000_2500']
+         'files/diverse_coco_pick_3_per_prompt_2000_2500', 
+         'files/diverse_coco_pick_3_per_prompt_2500_3000', 
+         'files/diverse_coco_pick_3_per_prompt_3000_3500', ]
 df = parser.raw_to_df(paths, do_overlap=True, keep_no_info=False)
 train_df, test_df = train_test_split(df, test_size=0.2, random_state=0)
 dataset_train = DiversityDataset(train_df,
@@ -28,7 +30,7 @@ dataset_test = DiversityDataset(test_df,
                                 preprocess=preprocess)
 clip_baseline = ClipBase()
 
-factor = 'main_object'
+factor = 'angle'
 pred, true = clip_baseline(dataset_train, factor)
 pred = np.array(pred)
 true = np.array(true)

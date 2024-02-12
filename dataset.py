@@ -6,6 +6,7 @@ from torchvision.transforms import Compose, Resize, CenterCrop, ToTensor, Normal
 from torch.utils.data import Dataset
 from io import BytesIO
 from transformers import BertTokenizer
+from torchvision.transforms import v2
 
 try:
     from torchvision.transforms import InterpolationMode
@@ -14,6 +15,13 @@ try:
 except ImportError:
     BICUBIC = Image.BICUBIC
 
+
+rnd_trans = v2.Compose([
+     v2.RandomResizedCrop(size=(224, 224), antialias=True),
+     v2.RandomHorizontalFlip(p=0.5),
+     v2.RandomRotation(degrees=(-90, 90)),
+     v2.RandomVerticalFlip(p=0.5),
+     ])
 
 def _convert_image_to_rgb(image):
     return image.convert("RGB")
@@ -50,7 +58,7 @@ def init_tokenizer():
 
 class DiversityDataset(Dataset):
 
-    def __init__(self, df, tokenizer=None, local_path=None, preprocess=None):
+    def __init__(self, df, tokenizer=None, local_path=None, preprocess=None, is_train=False):
         if preprocess is None:
             preprocess = _transform(224)
         if local_path is None:
@@ -61,6 +69,7 @@ class DiversityDataset(Dataset):
             tokenizer = init_tokenizer()
 
         self.local_path = local_path
+        self.is_train = is_train
 
         self.preprocess = preprocess
         self.df = df
@@ -68,6 +77,9 @@ class DiversityDataset(Dataset):
         self.data = self.make_data()
 
     def __getitem__(self, index):
+        #if self.is_train:
+        #    self.data[index]['image_1'] = rnd_trans(self.data[index]['image_1'])
+        #    self.data[index]['image_2'] = rnd_trans(self.data[index]['image_2']) 
         return self.data[index]
 
     def __len__(self):
