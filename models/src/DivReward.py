@@ -139,7 +139,7 @@ class DivReward(nn.Module):
         inp = emb_text
         prob_data = self.mlp(inp)
 
-        return prob_data
+        return prob_data, emb_img_1, emb_img_2
 
     def encode_pair(self, batch_data):
         text_ids, text_mask, img_1, img_2 = batch_data['text_ids'], batch_data['text_mask'], batch_data['image_1'], \

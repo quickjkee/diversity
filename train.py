@@ -51,6 +51,15 @@ def init_seeds(seed, cuda_deterministic=True):
         cudnn.benchmark = True
 
 
+# def loss_func(predict, target):
+#    loss = nn.CrossEntropyLoss(reduction='none')
+#    loss_list = loss(predict, target)
+#    loss = torch.mean(loss_list, dim=0)
+#    correct = torch.eq(torch.max(F.softmax(predict, dim=1), dim=1)[1], target).view(-1)
+#    acc = torch.sum(correct).item() / len(target)
+#    return loss, loss_list, acc
+
+
 class FocalLoss(nn.Module):
     def __init__(self, alpha=None, gamma=5):
         super(FocalLoss, self).__init__()
@@ -65,12 +74,21 @@ class FocalLoss(nn.Module):
         return loss, ce_loss
 
 
+def samples_metric_thresh(labels_sim, labels_true):
+    accs = []
+    threshs = np.linspace(min(labels_sim), max(labels_sim), 10)
+    for thresh in threshs:
+        curr_pred = (np.array(labels_sim) > thresh) * 1
+        curr_pred = list(curr_pred.astype(int))
+        accs.append(samples_metric(labels_true, curr_pred)[0])
+    return max(accs)
+
+
 def run_train(train_dataset,
               valid_dataset,
               model,
               label,
               loss_w):
-
     if opts.std_log:
         std_log()
 
@@ -91,21 +109,25 @@ def run_train(train_dataset,
     loss_fn = FocalLoss(alpha=loss_w.to(device) * 500)
     test_dataset = valid_dataset
 
-    def loss_func(predict, target):
+    def loss_cl_fn(predict, target):
         loss, loss_list = loss_fn(predict, target)
         preds_probs = F.softmax(predict, dim=1)
         correct = torch.eq(torch.max(preds_probs, dim=1)[1], target).view(-1)
         acc = torch.sum(correct).item() / len(target)
 
-        return loss, loss_list, acc
+        return loss, acc
 
-    #def loss_func(predict, target):
-    #    loss = nn.CrossEntropyLoss(reduction='none')
-    #    loss_list = loss(predict, target)
-    #    loss = torch.mean(loss_list, dim=0)
-    #    correct = torch.eq(torch.max(F.softmax(predict, dim=1), dim=1)[1], target).view(-1)
-    #    acc = torch.sum(correct).item() / len(target)
-    #    return loss, loss_list, acc
+    def loss_sim_fn(img_1, img_2, target):
+        sim = (F.cosine_similarity(img_1, img_2, dim=1) + 1) / 2
+        target = target * (-2) + 1
+        sim_loss_list = sim * target
+        sim_loss = torch.mean(sim_loss_list)
+        print(sim)
+        print(target)
+        print(sim_loss_list)
+        print('========')
+
+        return sim_loss, sim
 
     if opts.distributed:
         train_sampler = DistributedSampler(train_dataset)
@@ -140,53 +162,66 @@ def run_train(train_dataset,
     # valid result print and log
     if get_rank() == 0:
         model.eval()
-        valid_loss = []
-        valid_acc_list = []
-        labels_preds = []
-        labels_true = []
+        valid_loss, valid_loss_sim = 0, 0
+        labels_preds, labels_true, labels_sim = [], [], []
         with torch.no_grad():
             for step, batch_data_package in enumerate(valid_loader):
-                predict = model(batch_data_package)
+                predict, emb_img_1, emb_img_2 = model(batch_data_package)
                 target = batch_data_package[label].to(device)
-                loss, loss_list, acc = loss_func(predict, target)
+                loss_cl, acc = loss_cl_fn(predict, target)
+                loss_sim, sim_list = loss_sim_fn(emb_img_1, emb_img_2, target)
 
+                # RECORDING
+                # --------------------------
+                # Labels for further prediction
                 labels_preds.append(torch.max(F.softmax(predict, dim=1), dim=1)[1].cpu().view(-1).int())
                 labels_true.append(target.cpu().view(-1).int())
-                valid_loss.append(loss_list)
-                valid_acc_list.append(acc)
+                labels_sim.append(sim_list.cpu().view(-1))
 
-        # record valid and save best model
-        valid_loss = torch.cat(valid_loss, 0)
+                # losses
+                valid_loss += loss_cl.cpu().item()
+                valid_loss_sim += loss_sim.cpu().item()
+                # --------------------------
+
+        # AGGREGATION
+        # --------------------------
         labels_preds = list(np.array(torch.cat(labels_preds, 0)))
         labels_true = list(np.array(torch.cat(labels_true, 0)))
+        labels_sim = list(np.array(torch.cat(labels_sim, 0)))
+
+        valid_loss = valid_loss / len(valid_loader)
+        valid_loss_sim = valid_loss_sim / len(valid_loader)
         boots_acc = samples_metric(labels_true, labels_preds)[0]
-        print('Validation - Iteration %d | Loss %6.5f | Acc %6.4f | BootsAcc %6.4f' % (
-        0, torch.mean(valid_loss), sum(valid_acc_list) / len(valid_acc_list), boots_acc))
-        writer.add_scalar('Validation-Loss', torch.mean(valid_loss), global_step=0)
-        writer.add_scalar('Validation-Acc', sum(valid_acc_list) / len(valid_acc_list), global_step=0)
+        sim_boots_acc = samples_metric_thresh(labels_sim, labels_true)
+        # --------------------------
+
+        print('Validation - Iteration %d | Loss %6.5f | SimLoss %6.5f | BootsAcc %6.4f | SimBootsAcc %6.4f' %
+              (0, valid_loss, valid_loss_sim, boots_acc, sim_boots_acc))
+        writer.add_scalar('Validation-Loss', valid_loss, global_step=0)
         writer.add_scalar('Validation-BootsAcc', boots_acc, global_step=0)
 
     best_acc = 0
     optimizer.zero_grad()
-    # fix_rate_list = [float(i) / 10 for i in reversed(range(10))]
-    # fix_epoch_edge = [opts.epochs / (len(fix_rate_list)+1) * i for i in range(1, len(fix_rate_list)+1)]
-    # fix_rate_idx = 0
     losses = []
     acc_list = []
     for epoch in range(opts.epochs):
 
         for step, batch_data_package in enumerate(train_loader):
             model.train()
-            predict = model(batch_data_package)
+
+            # Predict
+            predict, emb_img_1, emb_img_2 = model(batch_data_package)
             target = batch_data_package[label].to(device)
-#            print(target)
-            loss, loss_list, acc = loss_func(predict, target)
+            loss_cl, acc = loss_cl_fn(predict, target)
+            loss_sim, sim_list = loss_sim_fn(emb_img_1, emb_img_2, target)
+            loss = loss_cl + loss_sim
+
             # loss regularization
             loss = loss / opts.accumulation_steps
             # back propagation
             loss.backward()
 
-            losses.append(loss_list)
+            losses.append(loss.detach().cpu().item())
             acc_list.append(acc)
 
             iterations = epoch * len(train_loader) + step + 1
@@ -201,51 +236,65 @@ def run_train(train_dataset,
 
                 # train result print and log 
                 if get_rank() == 0:
-                    losses_log = torch.cat(losses, 0)
-                    print('Iteration %d | Loss %6.5f | Acc %6.4f' % (
-                    train_iteration, torch.mean(losses_log), sum(acc_list) / len(acc_list)))
-                    writer.add_scalar('Train-Loss', torch.mean(losses_log), global_step=train_iteration)
+                    losses = np.mean(losses)[0]
+                    print('Iteration %d | Loss %6.5f | Acc %6.4f' %
+                          (train_iteration, losses, sum(acc_list) / len(acc_list)))
+                    writer.add_scalar('Train-Loss', losses, global_step=train_iteration)
                     writer.add_scalar('Train-Acc', sum(acc_list) / len(acc_list), global_step=train_iteration)
 
                 losses.clear()
                 acc_list.clear()
 
-            # valid result print and log
+            # VALIDATION
+            # ----------------------------------------------------------------------------
             if (iterations % steps_per_valid) == 0:
                 if get_rank() == 0:
                     model.eval()
-                    valid_loss = []
-                    valid_acc_list = []
-                    labels_preds = []
-                    labels_true = []
+                    valid_loss, valid_loss_sim = 0, 0
+                    labels_preds, labels_true, labels_sim = [], [], []
                     with torch.no_grad():
                         for step, batch_data_package in enumerate(valid_loader):
-                            predict = model(batch_data_package)
+                            predict, emb_img_1, emb_img_2 = model(batch_data_package)
                             target = batch_data_package[label].to(device)
-                            loss, loss_list, acc = loss_func(predict, target)
+                            loss_cl, acc = loss_cl_fn(predict, target)
+                            loss_sim, sim_list = loss_sim_fn(emb_img_1, emb_img_2, target)
 
+                            # RECORDING
+                            # --------------------------
+                            # Labels for further prediction
                             labels_preds.append(torch.max(F.softmax(predict, dim=1), dim=1)[1].cpu().view(-1).int())
                             labels_true.append(target.cpu().view(-1).int())
-                            valid_loss.append(loss_list)
-                            valid_acc_list.append(acc)
+                            labels_sim.append(sim_list.cpu().view(-1))
 
-                    # record valid and save best model
-                    valid_loss = torch.cat(valid_loss, 0)
+                            # losses
+                            valid_loss += loss_cl.cpu().item()
+                            valid_loss_sim += loss_sim.cpu().item()
+                            # --------------------------
+
+                    # AGGREGATION
+                    # --------------------------
                     labels_preds = list(np.array(torch.cat(labels_preds, 0)))
                     labels_true = list(np.array(torch.cat(labels_true, 0)))
+                    labels_sim = list(np.array(torch.cat(labels_sim, 0)))
+
+                    valid_loss = valid_loss / len(valid_loader)
+                    valid_loss_sim = valid_loss_sim / len(valid_loader)
                     boots_acc = samples_metric(labels_true, labels_preds)[0]
-                    print('Validation - Iteration %d | Loss %6.5f | Acc %6.4f | BootsAcc %6.4f' % (
-                    train_iteration, torch.mean(valid_loss), sum(valid_acc_list) / len(valid_acc_list), boots_acc))
-                    writer.add_scalar('Validation-Loss', torch.mean(valid_loss), global_step=train_iteration)
-                    writer.add_scalar('Validation-Acc', sum(valid_acc_list) / len(valid_acc_list),
-                                      global_step=train_iteration)
-                    writer.add_scalar('Validation-BootsAcc', boots_acc, global_step=train_iteration)
+                    sim_boots_acc = samples_metric_thresh(labels_sim, labels_true)
+                    # --------------------------
+
+                    print(
+                        'Validation - Iteration %d | Loss %6.5f | SimLoss %6.5f | BootsAcc %6.4f | SimBootsAcc %6.4f'
+                        % (0, valid_loss, valid_loss_sim, boots_acc, sim_boots_acc))
+                    writer.add_scalar('Validation-Loss', valid_loss, global_step=0)
+                    writer.add_scalar('Validation-BootsAcc', boots_acc, global_step=0)
 
                     if boots_acc > best_acc:
                         print("Best BootsAcc so far. Saving model")
                         best_acc = boots_acc
                         print("best_acc = ", best_acc)
                         save_model(model)
+            # ----------------------------------------------------------------------------
 
     # test model
     if get_rank() == 0:
@@ -254,23 +303,35 @@ def run_train(train_dataset,
         model = load_model(model)
         model.eval()
 
-        test_loss = []
-        acc_list = []
-        labels_preds = []
-        labels_true = []
+        test_loss = 0
+        labels_preds, labels_true, labels_sim = [], [], []
         with torch.no_grad():
             for step, batch_data_package in enumerate(test_loader):
-                predict = model(batch_data_package)
+                predict, emb_img_1, emb_img_2 = model(batch_data_package)
                 target = batch_data_package[label].to(device)
-                loss, loss_list, acc = loss_func(predict, target)
+                loss_cl, acc = loss_cl_fn(predict, target)
+                loss_sim, sim_list = loss_sim_fn(emb_img_1, emb_img_2, target)
 
-                labels_preds.append(torch.max(F.softmax(predict, dim=1), dim=1)[1].cpu().view(-1))
-                labels_true.append(target.cpu().view(-1))
-                test_loss.append(loss_list)
-                acc_list.append(acc)
+                # RECORDING
+                # --------------------------
+                # Labels for further prediction
+                labels_preds.append(torch.max(F.softmax(predict, dim=1), dim=1)[1].cpu().view(-1).int())
+                labels_true.append(target.cpu().view(-1).int())
+                labels_sim.append(sim_list.cpu().view(-1))
 
-        test_loss = torch.cat(test_loss, 0)
-        labels_preds = np.array(torch.cat(labels_preds, 0))
-        labels_true = np.array(torch.cat(labels_true, 0))
+                # losses
+                test_loss += loss_cl.cpu().item()
+                # --------------------------
+
+        # AGGREGATION
+        # --------------------------
+        labels_preds = list(np.array(torch.cat(labels_preds, 0)))
+        labels_true = list(np.array(torch.cat(labels_true, 0)))
+        labels_sim = list(np.array(torch.cat(labels_sim, 0)))
+
+        test_loss = test_loss / len(test_loader)
         boots_acc = samples_metric(labels_true, labels_preds)[0]
-        print('Test Loss %6.5f | Acc %6.4f' % (torch.mean(test_loss), boots_acc))
+        sim_boots_acc = samples_metric_thresh(labels_sim, labels_true)
+        # --------------------------
+
+        print('Test Loss %6.5f | Acc %6.4f | SimAcc %6.4f' % (test_loss, boots_acc, sim_boots_acc))
