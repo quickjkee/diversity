@@ -69,7 +69,7 @@ def run_train(train_dataset,
               valid_dataset,
               model,
               label,
-              sample_w, loss_w):
+              loss_w):
 
     if opts.std_log:
         std_log()
@@ -108,12 +108,7 @@ def run_train(train_dataset,
     #    return loss, loss_list, acc
 
     if opts.distributed:
-        #if sample_w is None:
         train_sampler = DistributedSampler(train_dataset)
-        #else:
-        #    w_sampler = WeightedRandomSampler(weights=sample_w, num_samples=len(sample_w), replacement=True)
-        #    train_sampler = DistributedSamplerWrapper(sampler=w_sampler, num_replicas=torch.cuda.device_count(),
-        #                                              rank=torch.cuda.current_device())
         train_loader = DataLoader(train_dataset, batch_size=opts.batch_size, sampler=train_sampler,
                                   collate_fn=collate_fn if not opts.rank_pair else None)
     else:

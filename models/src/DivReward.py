@@ -31,16 +31,16 @@ class MLP(nn.Module):
 
         self.layers = nn.Sequential(
             nn.Linear(self.input_size, 1024),
-            #nn.ReLU(),
+            # nn.ReLU(),
             nn.Dropout(0.2),
             nn.Linear(1024, 128),
-            #nn.ReLU(),
+            # nn.ReLU(),
             nn.Dropout(0.2),
             nn.Linear(128, 64),
-            #nn.ReLU(),
+            # nn.ReLU(),
             nn.Dropout(0.1),
             nn.Linear(64, 16),
-            #nn.ReLU(),
+            # nn.ReLU(),
             nn.Linear(16, 2),
         )
 
@@ -131,13 +131,14 @@ class DivReward(nn.Module):
                     parms.requires_grad_(True)
 
     def forward(self, batch_data):
-
-        # encode data
+        # parse data
         batch_data = self.encode_pair(batch_data)
-        emb_text = batch_data['emb_text']
-        inp = emb_text #torch.concat((emb_text, emb_img), dim=1)
+        emb_text, emb_img_1, emb_img_2 = batch_data['emb_text'], batch_data['emb_img_1'], batch_data['emb_img_2']
+
         # forward
+        inp = emb_text
         prob_data = self.mlp(inp)
+
         return prob_data
 
     def encode_pair(self, batch_data):
@@ -148,20 +149,12 @@ class DivReward(nn.Module):
         img_1 = img_1.to(self.device)  # [batch_size, C, H, W]
         img_2 = img_2.to(self.device)  # [batch_size, C, H, W]
 
-        # encode better emb
+        # img
         image_embeds_1 = self.blip.visual_encoder(img_1)
-        #image_atts_1 = torch.ones(image_embeds_1.size()[:-1], dtype=torch.long).to(self.device)
-        #emb_1 = self.src.text_encoder(text_ids,
-        #                               attention_mask=text_mask,
-        #                               encoder_hidden_states=image_embeds_1,
-        #                               encoder_attention_mask=image_atts_1,
-        #                               return_dict=True,
-        #                               ).last_hidden_state  # [batch_size, seq_len, feature_dim]
-        #emb_1 = emb_1[:, 0, :].float()
-
-        # encode better emb
         image_embeds_2 = self.blip.visual_encoder(img_2)
         image_embeds = torch.cat((image_embeds_1, image_embeds_2), 1)
+
+        # txt
         image_atts_2 = torch.ones(image_embeds.size()[:-1], dtype=torch.long).to(self.device)
         emb_2 = self.blip.text_encoder(text_ids,
                                        attention_mask=text_mask,
@@ -172,6 +165,8 @@ class DivReward(nn.Module):
         emb_2 = emb_2[:, 0, :].float()
 
         # get batch data
-        batch_data = {'emb_text': emb_2}
+        batch_data = {'emb_text': emb_2,
+                      'emb_img_1': image_embeds_1[:, 0, :].float(),
+                      'emb_img_2': image_embeds_2[:, 0, :].float()}
 
         return batch_data

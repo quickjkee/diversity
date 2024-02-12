@@ -36,9 +36,9 @@ def get_weights(dataset, label):
             if el == label:
                 class_weights[label] += 1
         class_weights[label] = (len(all_labels)) / class_weights[label]
-    sample_weights = None #[class_weights[item] for item in all_labels]
+
     loss_weights = list(class_weights.values())
-    return loss_weights, sample_weights
+    return loss_weights
 
 
 # Prepare dataset
@@ -57,7 +57,7 @@ train_df, test_df = train_test_split(df, test_size=0.2, random_state=0)
 train_dataset = DiversityDataset(train_df,
                                  local_path='/extra_disk_1/quickjkee/diversity_images',
                                  preprocess=preprocess, is_train=True)
-loss_w, sample_w = get_weights(train_dataset, LABEL)
+loss_w = get_weights(train_dataset, LABEL)
 loss_w = torch.FloatTensor(loss_w)
 valid_dataset = DiversityDataset(test_df,
                                  local_path='/extra_disk_1/quickjkee/diversity_images',
@@ -72,7 +72,7 @@ use_lora = True
 backbone = blip_pretrain(pretrained=config['blip_path'], image_size=config['BLIP']['image_size'],
                          vit=config['BLIP']['vit'])
 # FOR BLIP
-#model = backbone.visual_encoder
+model = backbone.visual_encoder
 
 # FOR DREAMSIMSIM
 #model = model.extractor_list[0].model
@@ -100,5 +100,5 @@ print(f'Label for training {LABEL}')
 run_train(train_dataset=train_dataset,
           valid_dataset=valid_dataset,
           model=main_model,
-          loss_w=loss_w, sample_w=sample_w,
+          loss_w=loss_w,
           label=LABEL)
