@@ -198,7 +198,7 @@ def run_train(train_dataset,
         valid_loss = valid_loss / len(valid_loader)
         valid_loss_sim = valid_loss_sim / len(valid_loader)
         boots_acc = samples_metric(labels_true, labels_preds)[0]
-        sim_boots_acc = pearson(labels_true, labels_sim) #samples_metric_thresh(labels_sim, labels_true)
+        sim_boots_acc = pearson(labels_true, labels_sim)
         # --------------------------
 
         print('Validation - Iteration %d | Loss %6.5f | SimLoss %6.5f | BootsAcc %6.4f | Pearson %6.4f' %
@@ -285,7 +285,7 @@ def run_train(train_dataset,
                     valid_loss = valid_loss / len(valid_loader)
                     valid_loss_sim = valid_loss_sim / len(valid_loader)
                     boots_acc = samples_metric(labels_true, labels_preds)[0]
-                    sim_boots_acc = pearson(labels_sim, labels_true) #samples_metric_thresh(labels_sim, labels_true)
+                    sim_boots_acc = pearson(labels_sim, labels_true)
                     # --------------------------
 
                     print(
@@ -336,7 +336,7 @@ def run_train(train_dataset,
 
         test_loss = test_loss / len(test_loader)
         boots_acc = samples_metric(labels_true, labels_preds)[0]
-        sim_boots_acc = pearson(labels_sim, labels_true) #samples_metric_thresh(labels_sim, labels_true)
+        sim_boots_acc = pearson(labels_sim, labels_true)
         # --------------------------
 
         print('Test Loss %6.5f | Acc %6.4f | Pearson %6.4f' % (test_loss, boots_acc, sim_boots_acc))
