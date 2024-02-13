@@ -1,5 +1,5 @@
 '''
-@File       :   train.py
+@File       :   train_hinge.py
 @Time       :   2023/02/04 10:51:00
 @Auther     :   Jiazheng Xu
 @Contact    :   xjz22@mails.tsinghua.edu.cn

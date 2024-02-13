@@ -27,7 +27,7 @@ run_cmd="CUDA_VISIBLE_DEVICES=${GPU_ID} torchrun
         --nnodes=1
         --nproc_per_node=${NUM_GPUS_PER_WORKER}
         --master_port=${MASTER_PORT}
-        main.py ${train_options}"
+        main_hinge.py ${train_options}"
 
 echo ${run_cmd}
 eval ${run_cmd}

@@ -17,7 +17,7 @@ from sklearn.model_selection import train_test_split
 from utilss.parser import Parser
 from dataset import DiversityDataset
 from models.src.DivReward import DivReward
-from train import run_train
+from train_blip import run_train
 
 from models.baseline_blip import blip_pretrain, preprocess
 #from models.baseline_clip import preprocess, model
