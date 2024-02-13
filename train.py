@@ -32,7 +32,7 @@ from torch.utils.data.distributed import DistributedSampler, Sampler
 from torch.backends import cudnn
 from metrics import samples_metric
 from catalyst.data.sampler import DistributedSamplerWrapper
-
+from scipy import stats
 
 def std_log():
     if get_rank() == 0:
@@ -50,6 +50,11 @@ def init_seeds(seed, cuda_deterministic=True):
         cudnn.deterministic = False
         cudnn.benchmark = True
 
+def pearson(x, y):
+    x = np.array(x)
+    y = np.array(y)
+    res = stats.spearmanr(x, y)
+    return res.statistic
 
 # def loss_func(predict, target):
 #    loss = nn.CrossEntropyLoss(reduction='none')
@@ -118,16 +123,17 @@ def run_train(train_dataset,
         return loss, acc
 
     def loss_sim_fn(img_1, img_2, target):
-        sim = (F.cosine_similarity(img_1, img_2, dim=1) + 1) / 2
-        target = target * (-2) + 1
-        sim_loss_list = sim * target
-        sim_loss = torch.mean(sim_loss_list)
-        print(sim)
-        print(target)
-        print(sim_loss_list)
-        print('========')
-
-        return sim_loss, sim
+        sim = F.cosine_similarity(img_1, img_2, dim=1) #torch.abs(img_1 - img_2).sum(dim=1)
+        loss = 1 - sim
+        new_target = target * (2) - 1
+        l = nn.HingeEmbeddingLoss(margin=0.05)
+        sim_loss = l(loss, new_target)
+#        print(sim)
+#        print(target)
+#        print('====')
+        with torch.no_grad():
+            sim_list = (sim + 1) / 2
+        return sim_loss, sim_list
 
     if opts.distributed:
         train_sampler = DistributedSampler(train_dataset)
@@ -176,7 +182,7 @@ def run_train(train_dataset,
                 # Labels for further prediction
                 labels_preds.append(torch.max(F.softmax(predict, dim=1), dim=1)[1].cpu().view(-1).int())
                 labels_true.append(target.cpu().view(-1).int())
-                labels_sim.append(sim_list.cpu().view(-1))
+                labels_sim.append(F.softmax(predict, dim=1)[:,1].cpu().view(-1))
 
                 # losses
                 valid_loss += loss_cl.cpu().item()
@@ -192,10 +198,10 @@ def run_train(train_dataset,
         valid_loss = valid_loss / len(valid_loader)
         valid_loss_sim = valid_loss_sim / len(valid_loader)
         boots_acc = samples_metric(labels_true, labels_preds)[0]
-        sim_boots_acc = samples_metric_thresh(labels_sim, labels_true)
+        sim_boots_acc = pearson(labels_true, labels_sim) #samples_metric_thresh(labels_sim, labels_true)
         # --------------------------
 
-        print('Validation - Iteration %d | Loss %6.5f | SimLoss %6.5f | BootsAcc %6.4f | SimBootsAcc %6.4f' %
+        print('Validation - Iteration %d | Loss %6.5f | SimLoss %6.5f | BootsAcc %6.4f | Pearson %6.4f' %
               (0, valid_loss, valid_loss_sim, boots_acc, sim_boots_acc))
         writer.add_scalar('Validation-Loss', valid_loss, global_step=0)
         writer.add_scalar('Validation-BootsAcc', boots_acc, global_step=0)
@@ -214,8 +220,7 @@ def run_train(train_dataset,
             target = batch_data_package[label].to(device)
             loss_cl, acc = loss_cl_fn(predict, target)
             loss_sim, sim_list = loss_sim_fn(emb_img_1, emb_img_2, target)
-            loss = loss_cl + loss_sim
-
+            loss = loss_cl #+ 10 * loss_sim
             # loss regularization
             loss = loss / opts.accumulation_steps
             # back propagation
@@ -236,10 +241,10 @@ def run_train(train_dataset,
 
                 # train result print and log 
                 if get_rank() == 0:
-                    losses = np.mean(losses)[0]
+                    losses_lg = np.mean(losses)
                     print('Iteration %d | Loss %6.5f | Acc %6.4f' %
-                          (train_iteration, losses, sum(acc_list) / len(acc_list)))
-                    writer.add_scalar('Train-Loss', losses, global_step=train_iteration)
+                          (train_iteration, losses_lg, sum(acc_list) / len(acc_list)))
+                    writer.add_scalar('Train-Loss', losses_lg, global_step=train_iteration)
                     writer.add_scalar('Train-Acc', sum(acc_list) / len(acc_list), global_step=train_iteration)
 
                 losses.clear()
@@ -264,7 +269,7 @@ def run_train(train_dataset,
                             # Labels for further prediction
                             labels_preds.append(torch.max(F.softmax(predict, dim=1), dim=1)[1].cpu().view(-1).int())
                             labels_true.append(target.cpu().view(-1).int())
-                            labels_sim.append(sim_list.cpu().view(-1))
+                            labels_sim.append(F.softmax(predict, dim=1)[:,1].cpu().view(-1))
 
                             # losses
                             valid_loss += loss_cl.cpu().item()
@@ -280,11 +285,11 @@ def run_train(train_dataset,
                     valid_loss = valid_loss / len(valid_loader)
                     valid_loss_sim = valid_loss_sim / len(valid_loader)
                     boots_acc = samples_metric(labels_true, labels_preds)[0]
-                    sim_boots_acc = samples_metric_thresh(labels_sim, labels_true)
+                    sim_boots_acc = pearson(labels_sim, labels_true) #samples_metric_thresh(labels_sim, labels_true)
                     # --------------------------
 
                     print(
-                        'Validation - Iteration %d | Loss %6.5f | SimLoss %6.5f | BootsAcc %6.4f | SimBootsAcc %6.4f'
+                        'Validation - Iteration %d | Loss %6.5f | SimLoss %6.5f | BootsAcc %6.4f | Pearson %6.4f'
                         % (0, valid_loss, valid_loss_sim, boots_acc, sim_boots_acc))
                     writer.add_scalar('Validation-Loss', valid_loss, global_step=0)
                     writer.add_scalar('Validation-BootsAcc', boots_acc, global_step=0)
@@ -317,7 +322,7 @@ def run_train(train_dataset,
                 # Labels for further prediction
                 labels_preds.append(torch.max(F.softmax(predict, dim=1), dim=1)[1].cpu().view(-1).int())
                 labels_true.append(target.cpu().view(-1).int())
-                labels_sim.append(sim_list.cpu().view(-1))
+                labels_sim.append(F.softmax(predict, dim=1)[:,1].cpu().view(-1))
 
                 # losses
                 test_loss += loss_cl.cpu().item()
@@ -331,7 +336,7 @@ def run_train(train_dataset,
 
         test_loss = test_loss / len(test_loader)
         boots_acc = samples_metric(labels_true, labels_preds)[0]
-        sim_boots_acc = samples_metric_thresh(labels_sim, labels_true)
+        sim_boots_acc = pearson(labels_sim, labels_true) #samples_metric_thresh(labels_sim, labels_true)
         # --------------------------
 
-        print('Test Loss %6.5f | Acc %6.4f | SimAcc %6.4f' % (test_loss, boots_acc, sim_boots_acc))
+        print('Test Loss %6.5f | Acc %6.4f | Pearson %6.4f' % (test_loss, boots_acc, sim_boots_acc))

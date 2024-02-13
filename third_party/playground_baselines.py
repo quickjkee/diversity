@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from sklearn.model_selection import train_test_split
-
+from scipy import stats
 from utilss.parser import Parser
 from dataset import DiversityDataset
 from metrics import samples_metric
@@ -30,7 +30,7 @@ dataset_test = DiversityDataset(test_df,
                                 preprocess=preprocess)
 clip_baseline = ClipBase()
 
-factor = 'angle'
+factor = 'main_object'
 pred, true = clip_baseline(dataset_train, factor)
 pred = np.array(pred)
 true = np.array(true)
@@ -51,10 +51,12 @@ max_value = max(accs)
 
 found_thresh = threshs[accs.index(max_value)]
 pred_val, true_val = clip_baseline(dataset_test, factor)
-pred_val = (np.array(pred_val) > found_thresh) * 1
-pred_val = list(pred_val.astype(int))
-val_acc, val_std = samples_metric(true_val, pred_val)
+pred_val_th = (np.array(pred_val) > found_thresh) * 1
+pred_val_th = list(pred_val_th.astype(int))
+val_acc, val_std = samples_metric(true_val, pred_val_th)
 print(f'acc {val_acc}, std {val_std}')
+res = stats.spearmanr(pred_val, true_val)
+print(f'corr {res.statistic}')
 
 fig, axes = plt.subplots(1, 1,  figsize=(10, 5))
 metrics = ['accuracy']

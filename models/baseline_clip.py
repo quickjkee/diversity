@@ -18,12 +18,12 @@ class ClipBase:
     def _predict(self, item, factor):
         # img1
         image_1 = item['image_1'].to('cuda')
-        image_features_1 = model.embed(image_1.unsqueeze(0))
+        image_features_1 = model.encode_image(image_1.unsqueeze(0))
         image_features_1 /= image_features_1.norm(dim=-1, keepdim=True)
 
         # img2
         image_2 = item['image_2'].to('cuda')
-        image_features_2 = model.embed(image_2.unsqueeze(0))
+        image_features_2 = model.encode_image(image_2.unsqueeze(0))
         image_features_2 /= image_features_1.norm(dim=-1, keepdim=True)
 
         # similarity

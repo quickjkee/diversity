@@ -2,6 +2,7 @@
 
 NUM_GPUS_PER_WORKER=4
 MASTER_PORT=29500
+GPU_ID='0,1,4,5'
 
 train_options=" \
        --savepath blip_uni_cross_mul \
@@ -10,7 +11,7 @@ train_options=" \
        --epochs 10 \
        --distributed True \
        --gpu_num ${NUM_GPUS_PER_WORKER} \
-       --gpu_id '0,2,3,7' \
+       --gpu_id '0,1,4,5' \
        --clear_visualizer \
        --fix_rate 0.7 \
        --lr 1e-04 \
@@ -22,7 +23,7 @@ train_options=" \
        --valid_per_epoch 4 \
 "
 
-run_cmd="torchrun
+run_cmd="CUDA_VISIBLE_DEVICES=${GPU_ID} torchrun
         --nnodes=1
         --nproc_per_node=${NUM_GPUS_PER_WORKER}
         --master_port=${MASTER_PORT}
