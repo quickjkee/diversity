@@ -9,9 +9,6 @@ from models.src.config.utils import *
 from utilss.lora_wrapper import ViTConfig, ViTModel
 from peft import LoraConfig, get_peft_model
 
-os.environ['CUDA_VISIBLE_DEVICES'] = opts.gpu_id
-opts.BatchSize = opts.batch_size * opts.accumulation_steps * opts.gpu_num
-
 from sklearn.model_selection import train_test_split
 
 from utilss.parser import Parser
@@ -52,7 +49,7 @@ paths = ['files/0_500_pickscore_coco',
          'files/diverse_coco_pick_3_per_prompt_2000_2500',
          'files/diverse_coco_pick_3_per_prompt_2500_3000',
          'files/diverse_coco_pick_3_per_prompt_3000_3500', ]
-df = parser.raw_to_df(paths, do_overlap=True, keep_no_info=False)
+df = parser.raw_to_df(paths, do_overlap=True, keep_no_info=False)[:250]
 train_df, test_df = train_test_split(df, test_size=0.2, random_state=0)
 train_dataset = DiversityDataset(train_df,
                                  local_path='/extra_disk_1/quickjkee/diversity_images',

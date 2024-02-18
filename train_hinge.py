@@ -160,7 +160,7 @@ def run_train(train_dataset,
         labels_sim = list(np.array(torch.cat(labels_sim, 0)))
 
         valid_loss_sim = valid_loss_sim / len(valid_loader)
-        sim_boots_acc = samples_metric_thresh(labels_true, labels_sim)
+        sim_boots_acc = samples_metric_thresh(labels_sim, labels_true)
         pearson_r = pearson(labels_true, labels_sim)
         # --------------------------
 
@@ -189,7 +189,6 @@ def run_train(train_dataset,
             loss.backward()
 
             losses.append(loss.detach().cpu().item())
-            acc_list.append(acc)
 
             iterations = epoch * len(train_loader) + step + 1
             train_iteration = iterations / opts.accumulation_steps
@@ -204,10 +203,10 @@ def run_train(train_dataset,
                 # train result print and log 
                 if get_rank() == 0:
                     losses_lg = np.mean(losses)
-                    print('Iteration %d | Loss %6.5f | Acc %6.4f' %
-                          (train_iteration, losses_lg, sum(acc_list) / len(acc_list)))
+                    print('Iteration %d | Loss %6.5f' %
+                          (train_iteration, losses_lg))
                     writer.add_scalar('Train-Loss', losses_lg, global_step=train_iteration)
-                    writer.add_scalar('Train-Acc', sum(acc_list) / len(acc_list), global_step=train_iteration)
+#                    writer.add_scalar('Train-Acc', sum(acc_list) / len(acc_list), global_step=train_iteration)
 
                 losses.clear()
                 acc_list.clear()
@@ -240,7 +239,7 @@ def run_train(train_dataset,
                     labels_sim = list(np.array(torch.cat(labels_sim, 0)))
 
                     valid_loss_sim = valid_loss_sim / len(valid_loader)
-                    sim_boots_acc = samples_metric_thresh(labels_true, labels_sim)
+                    sim_boots_acc = samples_metric_thresh(labels_sim, labels_true)
                     pearson_r = pearson(labels_true, labels_sim)
                     # --------------------------
 
@@ -287,7 +286,7 @@ def run_train(train_dataset,
         labels_sim = list(np.array(torch.cat(labels_sim, 0)))
 
         test_loss = test_loss / len(test_loader)
-        sim_boots_acc = samples_metric_thresh(labels_true, labels_sim)
+        sim_boots_acc = samples_metric_thresh(labels_sim, labels_true)
         pearson_r = pearson(labels_sim, labels_true)
         # --------------------------
 

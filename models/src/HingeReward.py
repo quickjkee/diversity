@@ -31,6 +31,10 @@ class HingeReward(nn.Module):
 
         self.visual_encoder = backbone
 
+#        for name, parms in self.visual_encoder.named_parameters():
+#            if '_proj' in name:
+#                parms.requires_grad_(False)
+
         if img_lora:
             self.visual_encoder.requires_grad_(False)
             for name, parms in self.blip.visual_encoder.named_parameters():
@@ -42,14 +46,14 @@ class HingeReward(nn.Module):
             self.image_layer_num = 24 if config['BLIP']['vit'] == 'large' else 12
             if opts.fix_rate > 0:
                 image_fix_num = "blocks.{}".format(int(self.image_layer_num * opts.fix_rate))
-                for name, parms in self.blip.visual_encoder.named_parameters():
+                for name, parms in self.visual_encoder.named_parameters():
                     parms.requires_grad_(False)
                     if image_fix_num in name:
                         break
 
         all = 0
         trainable = 0
-        for name, parms in self.blip.visual_encoder.named_parameters():
+        for name, parms in self.visual_encoder.named_parameters():
             all += 1
             if parms.requires_grad:
                 trainable += 1
@@ -69,8 +73,8 @@ class HingeReward(nn.Module):
         img_2 = img_2.to(self.device)  # [batch_size, C, H, W]
 
         # img
-        image_embeds_1 = self.blip.visual_encoder(img_1)
-        image_embeds_2 = self.blip.visual_encoder(img_2)
+        image_embeds_1 = self.visual_encoder(img_1)
+        image_embeds_2 = self.visual_encoder(img_2)
 
         # get batch data
         batch_data = {'emb_img_1': image_embeds_1[:, 0, :].float(),
