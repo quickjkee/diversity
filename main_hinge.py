@@ -88,6 +88,7 @@ backbone = model
 backbone.requires_grad_(True)
 
 main_model = HingeReward(backbone, img_lora=use_lora)
+load_model(main_model, 'final_checkpoints/angle_74/best_lr\=0.0001.pt')
 # -----------------------------------
 
 
